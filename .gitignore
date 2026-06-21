@@ -1,0 +1,49 @@
+# Submit and Heal — Root .gitignore
+# ===================================
+
+# ---- Node / npm ----
+node_modules/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Next.js ----
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.vercel/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+backend/.venv/
+backend/venv/
+*.egg-info/
+dist/
+*.egg
+
+# ---- Environment / Secrets ----
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---- Logs ----
+*.log
+logs/

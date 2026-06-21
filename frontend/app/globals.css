@@ -1,0 +1,37 @@
+/*
+ * Submit and Heal — Global Styles
+ * --------------------------------
+ * Imports Tailwind CSS v4 and sets base tokens.
+ * The app uses a dark theme by default (bg-gray-950 set on <main> in page.tsx).
+ */
+
+@import "tailwindcss";
+
+:root {
+  /* Force dark background always — no light-mode toggle in Step 1 */
+  --background: #030712; /* gray-950 */
+  --foreground: #f9fafb; /* gray-50 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Smooth scroll for the whole page */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Textarea resize handle visibility in dark mode */
+textarea {
+  resize: vertical;
+}
