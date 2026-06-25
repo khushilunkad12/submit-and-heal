@@ -3,9 +3,6 @@
  * --------------------------------
  * Renders the submission form and handles communication with the
  * FastAPI backend at /api/submit.
- *
- * This is Step 1: frontend ↔ backend connection only (no AI logic).
- * Later steps will replace the response display with richer diagnostic UI.
  */
 
 "use client";
@@ -23,9 +20,12 @@ interface SubmitPayload {
 /** Shape of the response the backend returns */
 interface SubmitResponse {
   status: string;
-  repo_url: string;
-  error_description: string;
+  repo_url?: string;
+  error_description?: string;
   message: string;
+  detected_stack?: string;
+  file_list?: string[];
+  readme_preview?: string;
 }
 
 /** Wrapper for either a success response or an error */
@@ -88,6 +88,8 @@ export default function Home() {
             : `HTTP ${response.status}`;
         setResult({ ok: false, error: msg });
       } else {
+        console.log("Raw response json:", json);
+        console.log("Raw file_list:", json.file_list);
         setResult({ ok: true, data: json as SubmitResponse });
       }
     } catch (err) {
@@ -107,8 +109,8 @@ export default function Home() {
   // ----- Render -------------------------------------------------------------
 
   return (
-    <main className="min-h-screen bg-gray-950 flex items-center justify-center px-4 py-16">
-      <div className="w-full max-w-2xl">
+    <main className="min-h-screen bg-gray-950 flex flex-col items-center py-16 px-4">
+      <div className="w-full max-w-2xl flex-1">
 
         {/* Header */}
         <div className="mb-10 text-center">
@@ -217,7 +219,7 @@ export default function Home() {
                       d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
                     />
                   </svg>
-                  Submitting…
+                  Cloning &amp; Inspecting…
                 </span>
               ) : (
                 "Submit"
@@ -233,38 +235,84 @@ export default function Home() {
             className={`
               mt-6 rounded-2xl border p-6
               ${result.ok
-                ? "bg-green-950 border-green-800"
-                : "bg-red-950 border-red-800"
+                ? "bg-gray-900 border-gray-800"
+                : "bg-red-950/50 border-red-900/50"
               }
             `}
           >
             <h2
-              className={`text-sm font-semibold uppercase tracking-wider mb-3 ${
+              className={`text-sm font-semibold uppercase tracking-wider mb-4 ${
                 result.ok ? "text-green-400" : "text-red-400"
               }`}
             >
-              {result.ok ? "✅ Response from backend" : "❌ Error"}
+              {result.ok ? "✅ Repository Inspected" : "❌ Error"}
             </h2>
 
             {result.ok ? (
-              /* Pretty-print the raw JSON response */
-              <pre
-                id="response-json"
-                className="text-sm text-green-200 font-mono whitespace-pre-wrap break-all"
-              >
-                {JSON.stringify(result.data, null, 2)}
-              </pre>
+              <div className="space-y-5">
+                {/* Detected Stack Badge */}
+                {result.data.detected_stack && (
+                  <div className="flex items-center space-x-3">
+                    <span className="text-gray-400 text-sm font-medium">Detected Stack:</span>
+                    <span className="px-3 py-1 bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 rounded-full text-xs font-semibold uppercase tracking-wide">
+                      {result.data.detected_stack}
+                    </span>
+                  </div>
+                )}
+
+                {/* File List */}
+                {result.data.file_list && result.data.file_list.length > 0 && (
+                  <details className="group border border-gray-800 rounded-lg bg-gray-950/50 overflow-hidden">
+                    <summary className="px-4 py-3 cursor-pointer text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 flex justify-between items-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                      <span>Repository Files ({result.data.file_list.length})</span>
+                      <span className="text-gray-500 group-open:rotate-180 transition-transform duration-200">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </span>
+                    </summary>
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-800 bg-gray-900">
+                      <ul className="text-xs font-mono text-gray-400 space-y-1.5 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {result.data.file_list.slice(0, 100).map((file, i) => (
+                          <li key={i} className="break-all" title={file}>
+                            {file}
+                          </li>
+                        ))}
+                        {result.data.file_list.length > 100 && (
+                          <li className="text-indigo-400 italic mt-2">
+                            Showing 100 of {result.data.file_list.length} files
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  </details>
+                )}
+
+                {/* README Preview */}
+                {result.data.readme_preview && (
+                  <div className="border border-gray-800 rounded-lg overflow-hidden flex flex-col bg-gray-950/50">
+                    <div className="bg-gray-800/50 px-4 py-2.5 border-b border-gray-800 text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                      README Preview
+                    </div>
+                    <div className="p-4 max-h-80 overflow-y-auto custom-scrollbar">
+                      <pre className="text-sm text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">
+                        {result.data.readme_preview}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
-              <p className="text-sm text-red-300 font-mono">{result.error}</p>
+              <div className="p-4 bg-red-900/20 rounded-lg border border-red-900/50">
+                <p className="text-sm text-red-300 leading-relaxed">{result.error}</p>
+              </div>
             )}
           </div>
         )}
-
-        {/* Footer hint */}
-        <p className="mt-8 text-center text-xs text-gray-600">
-          Backend: <code className="text-gray-500">{process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}</code>
-        </p>
       </div>
+        
+      {/* Footer hint */}
+      <p className="mt-8 text-center text-xs text-gray-600">
+        Backend: <code className="text-gray-500">{process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}</code>
+      </p>
     </main>
   );
 }
