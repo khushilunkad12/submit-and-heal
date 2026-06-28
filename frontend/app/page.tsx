@@ -17,6 +17,15 @@ interface SubmitPayload {
   error_description: string;
 }
 
+/** Shape of the AI Diagnosis */
+interface DiagnosisResult {
+  root_cause: string;
+  affected_files: string[];
+  confidence: string;
+  fix_direction: string;
+  error_category: string;
+}
+
 /** Shape of the response the backend returns */
 interface SubmitResponse {
   status: string;
@@ -26,6 +35,7 @@ interface SubmitResponse {
   detected_stack?: string;
   file_list?: string[];
   readme_preview?: string;
+  diagnosis?: DiagnosisResult;
 }
 
 /** Wrapper for either a success response or an error */
@@ -296,6 +306,67 @@ export default function Home() {
                       <pre className="text-sm text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">
                         {result.data.readme_preview}
                       </pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* Diagnosis Section */}
+                {result.data.diagnosis && (
+                  <div className="border border-indigo-900/50 rounded-lg overflow-hidden flex flex-col bg-indigo-950/20 mt-6">
+                    <div className="bg-indigo-900/40 px-4 py-3 border-b border-indigo-900/50 flex justify-between items-center">
+                      <span className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        AI Diagnosis
+                      </span>
+                      <div className="flex gap-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          result.data.diagnosis.error_category.includes('runtime') ? 'bg-red-900/50 text-red-300' :
+                          result.data.diagnosis.error_category.includes('config') ? 'bg-yellow-900/50 text-yellow-300' :
+                          result.data.diagnosis.error_category.includes('dependency') ? 'bg-orange-900/50 text-orange-300' :
+                          'bg-gray-800 text-gray-300'
+                        }`}>
+                          {result.data.diagnosis.error_category.replace('_', ' ')}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          result.data.diagnosis.confidence === 'high' ? 'bg-green-900/50 text-green-300' :
+                          result.data.diagnosis.confidence === 'medium' ? 'bg-yellow-900/50 text-yellow-300' :
+                          'bg-red-900/50 text-red-300'
+                        }`}>
+                          {result.data.diagnosis.confidence} confidence
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="p-5 space-y-4">
+                      {/* Root Cause */}
+                      <div>
+                        <h3 className="text-xs font-semibold text-indigo-400/80 uppercase tracking-wider mb-2">Root Cause</h3>
+                        <p className="text-base text-gray-200 leading-relaxed">
+                          {result.data.diagnosis.root_cause}
+                        </p>
+                      </div>
+                      
+                      {/* Fix Direction */}
+                      <div className="bg-indigo-900/20 border border-indigo-500/20 rounded-md p-4">
+                        <h3 className="text-xs font-semibold text-indigo-400/80 uppercase tracking-wider mb-2">Recommended Fix</h3>
+                        <p className="text-sm text-indigo-200/90 leading-relaxed">
+                          {result.data.diagnosis.fix_direction}
+                        </p>
+                      </div>
+
+                      {/* Affected Files */}
+                      {result.data.diagnosis.affected_files && result.data.diagnosis.affected_files.length > 0 && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Likely Affected Files</h3>
+                          <ul className="flex flex-wrap gap-2">
+                            {result.data.diagnosis.affected_files.map((f, i) => (
+                              <li key={i} className="px-2 py-1 bg-gray-900 border border-gray-800 rounded text-xs font-mono text-gray-400">
+                                {f}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

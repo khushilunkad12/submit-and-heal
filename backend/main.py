@@ -9,11 +9,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
-from dotenv import load_dotenv
 import subprocess
 import tempfile
 import shutil
+from dotenv import load_dotenv
 from typing import Optional, List
+
+from agents.diagnosis_agent import diagnose, DiagnosisResult
 
 # Load environment variables from .env
 load_dotenv()
@@ -62,6 +64,7 @@ class SubmitResponse(BaseModel):
     detected_stack: Optional[str] = None
     file_list: Optional[List[str]] = None
     readme_preview: Optional[str] = None
+    diagnosis: Optional[DiagnosisResult] = None
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +102,7 @@ def root():
 
 
 @app.post("/api/submit", response_model=SubmitResponse)
-def submit(payload: SubmitRequest):
+async def submit(payload: SubmitRequest):
     """
     Accepts a GitHub repo URL and an error description from the frontend.
     Clones the repository to inspect it.
@@ -198,12 +201,23 @@ def submit(payload: SubmitRequest):
         detected_stack = detect_stack(base_names)
         print(f"Detected stack: {detected_stack} based on files")
         
+        # Prepare repo_info for diagnosis
+        repo_info = {
+            "detected_stack": detected_stack,
+            "file_list": file_list,
+            "readme_preview": readme_content
+        }
+        
+        # Call the diagnosis agent
+        diagnosis_result = await diagnose(repo_info, payload.error_description)
+        
         return SubmitResponse(
             status="success",
             repo_url=payload.repo_url,
             error_description=payload.error_description,
-            message="Repository successfully cloned and inspected.",
+            message="Repository successfully cloned, inspected, and diagnosed.",
             detected_stack=detected_stack,
             file_list=file_list,
-            readme_preview=readme_content
+            readme_preview=readme_content,
+            diagnosis=diagnosis_result
         )
