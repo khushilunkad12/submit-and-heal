@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from typing import Optional, List
 
 from agents.diagnosis_agent import diagnose, DiagnosisResult
+from agents.fix_agent import generate_fix, FixResult
 
 # Load environment variables from .env
 load_dotenv()
@@ -65,6 +66,7 @@ class SubmitResponse(BaseModel):
     file_list: Optional[List[str]] = None
     readme_preview: Optional[str] = None
     diagnosis: Optional[DiagnosisResult] = None
+    fix: Optional[FixResult] = None
 
 
 # ---------------------------------------------------------------------------
@@ -211,13 +213,19 @@ async def submit(payload: SubmitRequest):
         # Call the diagnosis agent
         diagnosis_result = await diagnose(repo_info, payload.error_description)
         
+        # Call the fix agent if confidence is high or medium
+        fix_result = None
+        if diagnosis_result.confidence in ["high", "medium"]:
+            fix_result = await generate_fix(temp_dir, diagnosis_result.model_dump())
+        
         return SubmitResponse(
             status="success",
             repo_url=payload.repo_url,
             error_description=payload.error_description,
-            message="Repository successfully cloned, inspected, and diagnosed.",
+            message="Repository successfully cloned, inspected, diagnosed, and patched.",
             detected_stack=detected_stack,
             file_list=file_list,
             readme_preview=readme_content,
-            diagnosis=diagnosis_result
+            diagnosis=diagnosis_result,
+            fix=fix_result
         )

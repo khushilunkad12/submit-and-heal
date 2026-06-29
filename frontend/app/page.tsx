@@ -26,6 +26,19 @@ interface DiagnosisResult {
   error_category: string;
 }
 
+interface PatchedFile {
+  file_path: string;
+  original_content: string;
+  patched_content: string;
+  explanation: string;
+}
+
+interface FixResult {
+  patched_files: PatchedFile[];
+  patch_summary: string;
+  confidence: string;
+}
+
 /** Shape of the response the backend returns */
 interface SubmitResponse {
   status: string;
@@ -36,6 +49,7 @@ interface SubmitResponse {
   file_list?: string[];
   readme_preview?: string;
   diagnosis?: DiagnosisResult;
+  fix?: FixResult;
 }
 
 /** Wrapper for either a success response or an error */
@@ -367,6 +381,64 @@ export default function Home() {
                           </ul>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Fix Section */}
+                {result.data.diagnosis && !result.data.fix && (
+                  <div className="mt-6 p-4 bg-yellow-900/20 rounded-lg border border-yellow-900/50">
+                    <p className="text-sm text-yellow-300 leading-relaxed">
+                      ⚠️ Confidence too low for auto-fix — please review the diagnosis manually
+                    </p>
+                  </div>
+                )}
+                
+                {result.data.fix && (
+                  <div className="border border-green-900/50 rounded-lg overflow-hidden flex flex-col bg-green-950/20 mt-6">
+                    <div className="bg-green-900/40 px-4 py-3 border-b border-green-900/50 flex justify-between items-center">
+                      <span className="text-sm font-bold text-green-300 uppercase tracking-wider flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                        Generated Fix
+                      </span>
+                      <div className="flex gap-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          result.data.fix.confidence === 'high' ? 'bg-green-900/50 text-green-300' :
+                          result.data.fix.confidence === 'medium' ? 'bg-yellow-900/50 text-yellow-300' :
+                          'bg-red-900/50 text-red-300'
+                        }`}>
+                          {result.data.fix.confidence} confidence
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="p-5 space-y-6">
+                      <div className="bg-green-900/20 border border-green-500/20 rounded-md p-4">
+                        <p className="text-sm text-green-200/90 leading-relaxed font-semibold">
+                          {result.data.fix.patch_summary}
+                        </p>
+                      </div>
+
+                      {result.data.fix.patched_files && result.data.fix.patched_files.length === 0 && (
+                        <div className="text-sm text-red-300">Fix agent could not generate file patches.</div>
+                      )}
+
+                      {result.data.fix.patched_files && result.data.fix.patched_files.map((file, i) => (
+                        <div key={i} className="space-y-3">
+                          <h4 className="text-sm font-bold text-gray-300 border-b border-gray-800 pb-2">{file.file_path}</h4>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div className="border border-red-900/30 rounded flex flex-col overflow-hidden">
+                              <div className="bg-red-900/20 px-3 py-1.5 border-b border-red-900/30 text-xs font-semibold text-red-400">Original</div>
+                              <pre className="p-3 bg-gray-950/50 text-xs text-gray-300 overflow-x-auto max-h-96 custom-scrollbar whitespace-pre-wrap">{file.original_content}</pre>
+                            </div>
+                            <div className="border border-green-900/30 rounded flex flex-col overflow-hidden">
+                              <div className="bg-green-900/20 px-3 py-1.5 border-b border-green-900/30 text-xs font-semibold text-green-400">Fixed</div>
+                              <pre className="p-3 bg-gray-950/50 text-xs text-gray-300 overflow-x-auto max-h-96 custom-scrollbar whitespace-pre-wrap">{file.patched_content}</pre>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-400 italic bg-gray-900/50 p-2 rounded">{file.explanation}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
