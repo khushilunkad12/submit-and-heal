@@ -41,6 +41,18 @@ async def diagnose(repo_info: dict, error_description: str) -> DiagnosisResult:
         prompt = f"""You are an expert AI software diagnostician.
 Analyze the following repository information and the user's error description to provide a diagnosis.
 
+IMPORTANT: Always analyze the actual code content first. 
+The user's error description may be inaccurate or incomplete. 
+Your diagnosis must be based primarily on what you see in the code, 
+not just what the user described.
+
+Follow this reasoning order:
+1. FIRST: Analyze the actual code files and file structure provided to identify what bugs genuinely exist in the code.
+2. SECOND: Check if the user's error description matches what you found in the code.
+3. If they MATCH: Diagnose normally with high confidence.
+4. If they DON'T MATCH: Trust the code analysis, not the user's description. Set confidence to "medium" and mention in root_cause that the described error doesn't match the actual code issue found (e.g. "The described error does not match the actual bug found in the code: [real bug explanation here]").
+5. If the code files are too vague to analyze: Then fall back to the user's error description with low confidence.
+
 Detected Stack: {detected_stack}
 
 User Error Description:
@@ -51,6 +63,18 @@ First 50 Files in Repository:
 
 README Preview:
 {readme_preview}
+
+IMPORTANT: Always analyze the actual code content first. 
+The user's error description may be inaccurate or incomplete. 
+Your diagnosis must be based primarily on what you see in the code, 
+not just what the user described.
+
+Follow this reasoning order:
+1. FIRST: Analyze the actual code files and file structure provided to identify what bugs genuinely exist in the code
+2. SECOND: Check if the user's error description matches what you found in the code
+3. If they MATCH: Diagnose normally with high confidence
+4. If they DON'T MATCH: Trust the code analysis, not the user's description. Set confidence to "medium" and mention in root_cause that the described error doesn't match the actual code issue found.
+5. If the code files are too vague to analyze: Then fall back to the user's error description with low confidence
 
 Based on this limited information, provide a diagnosis.
 Your response MUST be ONLY valid JSON matching this exact structure:
