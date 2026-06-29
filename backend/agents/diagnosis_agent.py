@@ -66,7 +66,7 @@ Do not include any preamble, markdown formatting (like ```json), or trailing tex
 
         # Using gemini-2.0-flash
         response = await client.aio.models.generate_content(
-            model="gemini-2.0-flash-lite",
+            model="gemini-2.5-flash-lite",
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
