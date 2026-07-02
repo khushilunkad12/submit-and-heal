@@ -88,9 +88,9 @@ Your response MUST be ONLY valid JSON matching this exact structure:
 Do not include any preamble, markdown formatting (like ```json), or trailing text. Return ONLY the raw JSON object.
 """
 
-        # Using gemini-2.0-flash
+        # Using gemini-3.1-flash-lite
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3.1-flash-lite",
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
