@@ -60,6 +60,13 @@ Affected Files Original Content:
 
 Instruction:
 Analyze the code carefully and generate a complete fixed version.
+
+When generating fixes:
+- Always prefer defensive programming — add null checks even if initializing with a default value
+- Use meaningful default values, not empty strings or 0
+- The fix should be production-quality, not just the minimal change to stop the error
+- Add a brief comment explaining why the change was made
+
 Return the COMPLETE fixed file content in patched_content, not just the changed lines.
 Your response MUST be ONLY valid JSON matching this exact structure:
 {{
