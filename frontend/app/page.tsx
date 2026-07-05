@@ -39,6 +39,14 @@ interface FixResult {
   confidence: string;
 }
 
+interface VerifyResult {
+  success: boolean;
+  output: string;
+  error: string;
+  verified: boolean;
+  summary: string;
+}
+
 /** Shape of the response the backend returns */
 interface SubmitResponse {
   status: string;
@@ -439,6 +447,75 @@ export default function Home() {
                           <p className="text-xs text-gray-400 italic bg-gray-900/50 p-2 rounded">{file.explanation}</p>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Verification Section */}
+                {result.data.verify && (
+                  <div className={`border rounded-lg overflow-hidden flex flex-col mt-6 ${
+                    result.data.verify.verified 
+                      ? 'border-emerald-900/50 bg-emerald-950/20' 
+                      : result.data.verify.error 
+                        ? 'border-red-900/50 bg-red-950/20'
+                        : 'border-yellow-900/50 bg-yellow-950/20'
+                  }`}>
+                    <div className={`px-4 py-3 border-b flex justify-between items-center ${
+                      result.data.verify.verified 
+                        ? 'bg-emerald-900/40 border-emerald-900/50' 
+                        : result.data.verify.error 
+                          ? 'bg-red-900/40 border-red-900/50'
+                          : 'bg-yellow-900/40 border-yellow-900/50'
+                    }`}>
+                      <span className={`text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${
+                        result.data.verify.verified 
+                          ? 'text-emerald-300' 
+                          : result.data.verify.error 
+                            ? 'text-red-300'
+                            : 'text-yellow-300'
+                      }`}>
+                        {result.data.verify.verified 
+                          ? '✅ Fix Verified — Your code runs successfully!' 
+                          : result.data.verify.error 
+                            ? '❌ Fix needs review — code still has issues'
+                            : '⚠️ Auto-verification skipped'}
+                      </span>
+                    </div>
+                    
+                    <div className="p-5 space-y-4">
+                      {/* Friendly Explanation */}
+                      <p className="text-sm text-gray-300 leading-relaxed">
+                        {result.data.verify.verified
+                          ? "Our AI sandbox executed your fixed code and confirmed it runs without errors. The fix is safe to deploy."
+                          : result.data.verify.error
+                            ? "Our sandbox ran the fixed code but it still produced errors. The fix may be incomplete. Review the diagnosis and consider fixing manually."
+                            : "Automatic code execution is not yet supported for this language. The fix looks correct based on AI analysis, but we recommend testing it manually before deploying."}
+                      </p>
+                      
+                      {/* Program Output for Success or skipped (though skipped usually has no output) */}
+                      {(result.data.verify.verified || (!result.data.verify.error && !result.data.verify.verified)) && (
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">📤 Program Output (what your fixed code prints):</h4>
+                          <pre className="p-3 bg-gray-950/50 text-xs text-gray-300 overflow-x-auto max-h-60 custom-scrollbar whitespace-pre-wrap border border-gray-800 rounded">
+                            {result.data.verify.output ? result.data.verify.output : "No output — code ran silently without errors"}
+                          </pre>
+                        </div>
+                      )}
+                      
+                      {/* Error Output for Failure */}
+                      {result.data.verify.error && (
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-semibold text-red-400/80 uppercase tracking-wider">⚠️ Error Output:</h4>
+                          <pre className="p-3 bg-red-950/20 text-xs text-red-300 overflow-x-auto max-h-60 custom-scrollbar whitespace-pre-wrap border border-red-900/30 rounded">{result.data.verify.error}</pre>
+                        </div>
+                      )}
+                      
+                      {/* General Info Note */}
+                      <div className="mt-4 pt-4 border-t border-gray-800/50 flex items-center justify-between">
+                        <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                          <span>🔒</span> Your code runs in an isolated sandbox — nothing affects your real repository
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}

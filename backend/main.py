@@ -17,6 +17,7 @@ from typing import Optional, List
 
 from agents.diagnosis_agent import diagnose, DiagnosisResult
 from agents.fix_agent import generate_fix, FixResult
+from agents.verify_agent import verify_fix, VerifyResult
 
 # Load environment variables from .env
 load_dotenv()
@@ -67,6 +68,7 @@ class SubmitResponse(BaseModel):
     readme_preview: Optional[str] = None
     diagnosis: Optional[DiagnosisResult] = None
     fix: Optional[FixResult] = None
+    verify: Optional[VerifyResult] = None
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +162,10 @@ async def submit(payload: SubmitRequest):
             
         # Inspect the repository
         file_list = []
+        files_content = {}
         readme_content = None
+        total_content_chars = 0
+        MAX_CHARS = 100000  # about 25,000 tokens
         
         # Check if cloning created a subfolder inside temp_dir
         # Sometimes `git clone url dir` creates `dir/repo_name` instead of cloning into `dir` directly?
@@ -185,13 +190,27 @@ async def submit(payload: SubmitRequest):
                     try:
                         with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                             content = f.read()
-                            # Truncate if too long
                             if len(content) > 1000:
                                 readme_content = content[:1000] + "\n\n... (truncated)"
                             else:
                                 readme_content = content
                     except Exception:
                         pass
+                else:
+                    # Read regular file content if within limit
+                    if total_content_chars < MAX_CHARS:
+                        # Skip likely binary extensions or assets
+                        ext = os.path.splitext(rel_path)[1].lower()
+                        if ext not in [".jpg", ".png", ".gif", ".ico", ".svg", ".zip", ".tar", ".gz", ".pdf", ".mp4"]:
+                            try:
+                                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                                    content = f.read()
+                                    if len(content) > 5000:
+                                        content = content[:5000] + "\n\n... (file truncated)"
+                                    files_content[rel_path] = content
+                                    total_content_chars += len(content)
+                            except Exception:
+                                pass
         
         # Sort files alphabetically
         file_list.sort()
@@ -207,6 +226,7 @@ async def submit(payload: SubmitRequest):
         repo_info = {
             "detected_stack": detected_stack,
             "file_list": file_list,
+            "files_content": files_content,
             "readme_preview": readme_content
         }
         
@@ -215,17 +235,21 @@ async def submit(payload: SubmitRequest):
         
         # Call the fix agent if confidence is high or medium
         fix_result = None
+        verify_result = None
         if diagnosis_result.confidence in ["high", "medium"]:
             fix_result = await generate_fix(temp_dir, diagnosis_result.model_dump())
+            if fix_result and fix_result.confidence in ["high", "medium"]:
+                verify_result = await verify_fix(fix_result.model_dump())
         
         return SubmitResponse(
             status="success",
             repo_url=payload.repo_url,
             error_description=payload.error_description,
-            message="Repository successfully cloned, inspected, diagnosed, and patched.",
+            message="Repository successfully cloned, inspected, diagnosed, patched, and verified.",
             detected_stack=detected_stack,
             file_list=file_list,
             readme_preview=readme_content,
             diagnosis=diagnosis_result,
-            fix=fix_result
+            fix=fix_result,
+            verify=verify_result
         )

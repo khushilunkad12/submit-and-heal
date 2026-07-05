@@ -33,6 +33,12 @@ async def diagnose(repo_info: dict, error_description: str) -> DiagnosisResult:
         detected_stack = repo_info.get("detected_stack", "Unknown")
         file_list = repo_info.get("file_list", [])
         readme_preview = repo_info.get("readme_preview") or "No README provided."
+        files_content = repo_info.get("files_content", {})
+        
+        # Format the actual code content for the prompt
+        files_content_str = ""
+        for path, content in files_content.items():
+            files_content_str += f"\\n--- {path} ---\\n{content}\\n"
         
         # Truncate file list to first 50 files
         truncated_files = file_list[:50]
@@ -64,6 +70,9 @@ First 50 Files in Repository:
 README Preview:
 {readme_preview}
 
+Repository Code Files:
+{files_content_str}
+
 IMPORTANT: Always analyze the actual code content first. 
 The user's error description may be inaccurate or incomplete. 
 Your diagnosis must be based primarily on what you see in the code, 
@@ -87,6 +96,10 @@ Your response MUST be ONLY valid JSON matching this exact structure:
 }}
 Do not include any preamble, markdown formatting (like ```json), or trailing text. Return ONLY the raw JSON object.
 """
+
+        print("=== PROMPT BEING SENT TO GEMINI ===")
+        print(prompt[:2000])  # first 2000 chars only
+        print("=== END PROMPT ===")
 
         # Using gemini-3.1-flash-lite
         response = await client.aio.models.generate_content(
