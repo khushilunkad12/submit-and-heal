@@ -42,7 +42,7 @@ async def verify_fix(fix_result: dict) -> VerifyResult:
     extension = os.path.splitext(entry_file_path)[1].lower()
 
     try:
-        if extension in [".py", ".js", ".ts"]:
+        if extension in [".py", ".js", ".ts", ".java"]:
             with e2b_code_interpreter.Sandbox.create() as sandbox:
                 # Write all patched files to the sandbox so relative imports work
                 for pf in patched_files:
@@ -93,7 +93,7 @@ async def verify_fix(fix_result: dict) -> VerifyResult:
                             verified=True,
                             summary="Code verified successfully in Python sandbox."
                         )
-                else:
+                elif extension in [".js", ".ts"]:
                     result = sandbox.commands.run(f"node {entry_file_path}")
 
                     if result.exit_code != 0:
@@ -112,14 +112,58 @@ async def verify_fix(fix_result: dict) -> VerifyResult:
                             verified=True,
                             summary="Code verified successfully in Node.js sandbox."
                         )
-        elif extension == ".java":
-            return VerifyResult(
-                success=False,
-                output="",
-                error="",
-                verified=False,
-                summary="Java verification coming soon"
-            )
+                elif extension == ".java":
+                    filename_full = os.path.basename(entry_file_path)
+                    classname = os.path.splitext(filename_full)[0]
+                    dir_name = os.path.dirname(entry_file_path)
+                    
+                    # 1. Compile
+                    compile_script = f"import subprocess; r = subprocess.run(['javac', '{filename_full}'], cwd='{dir_name or '.'}', capture_output=True, text=True); print(r.stdout); print(r.stderr)"
+                    compile_result = sandbox.run_code(compile_script)
+                    
+                    compile_error = ""
+                    if compile_result.logs.stderr:
+                        compile_error = "\\n".join(compile_result.logs.stderr)
+                    if compile_result.error:
+                        compile_error += f"\\n{compile_result.error.name}: {compile_result.error.value}"
+                        
+                    if compile_error.strip():
+                        return VerifyResult(
+                            success=False,
+                            output="",
+                            error="Compilation failed:\\n" + compile_error,
+                            verified=False,
+                            summary="Fixed code failed to compile"
+                        )
+                        
+                    # 2. Run
+                    run_script = f"import subprocess; r = subprocess.run(['java', '{classname}'], cwd='{dir_name or '.'}', capture_output=True, text=True); print(r.stdout); print(r.stderr)"
+                    run_result = sandbox.run_code(run_script)
+                    
+                    output = "\\n".join(run_result.logs.stdout) if run_result.logs.stdout else ""
+                    error = "\\n".join(run_result.logs.stderr) if run_result.logs.stderr else ""
+                    
+                    if run_result.error:
+                        if error:
+                            error += "\\n"
+                        error += f"{run_result.error.name}: {run_result.error.value}\\n{run_result.error.traceback}"
+                        
+                    if error.strip():
+                        return VerifyResult(
+                            success=False,
+                            output=output,
+                            error=error,
+                            verified=False,
+                            summary="Code execution failed with errors."
+                        )
+                    else:
+                        return VerifyResult(
+                            success=True,
+                            output=output or "Code executed successfully (no output).",
+                            error="",
+                            verified=True,
+                            summary="Code verified successfully in Java sandbox."
+                        )
         else:
             return VerifyResult(
                 success=False,
