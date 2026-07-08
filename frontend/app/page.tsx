@@ -1,568 +1,94 @@
-/**
- * Submit and Heal — Main Page
- * --------------------------------
- * Renders the submission form and handles communication with the
- * FastAPI backend at /api/submit.
- */
+import Link from "next/link";
 
-"use client";
-
-import { useState, FormEvent } from "react";
-
-// ----- Types ----------------------------------------------------------------
-
-/** Shape of the JSON body we POST to the backend */
-interface SubmitPayload {
-  repo_url: string;
-  error_description: string;
-}
-
-/** Shape of the AI Diagnosis */
-interface DiagnosisResult {
-  root_cause: string;
-  affected_files: string[];
-  confidence: string;
-  fix_direction: string;
-  error_category: string;
-}
-
-interface PatchedFile {
-  file_path: string;
-  original_content: string;
-  patched_content: string;
-  explanation: string;
-}
-
-interface FixResult {
-  patched_files: PatchedFile[];
-  patch_summary: string;
-  confidence: string;
-}
-
-interface VerifyResult {
-  success: boolean;
-  output: string;
-  error: string;
-  verified: boolean;
-  summary: string;
-}
-
-/** Shape of the response the backend returns */
-interface SubmitResponse {
-  status: string;
-  repo_url?: string;
-  error_description?: string;
-  message: string;
-  detected_stack?: string;
-  file_list?: string[];
-  readme_preview?: string;
-  diagnosis?: DiagnosisResult;
-  fix?: FixResult;
-}
-
-/** Wrapper for either a success response or an error */
-type ApiResult =
-  | { ok: true; data: SubmitResponse }
-  | { ok: false; error: string };
-
-// ----- Component ------------------------------------------------------------
-
-export default function Home() {
-  // Form field state
-  const [repoUrl, setRepoUrl] = useState<string>("");
-  const [errorDescription, setErrorDescription] = useState<string>("");
-
-  // Request lifecycle state
-  const [loading, setLoading] = useState<boolean>(false);
-  const [result, setResult] = useState<ApiResult | null>(null);
-
-  /**
-   * Handle form submission:
-   * 1. Basic client-side guard (non-empty fields)
-   * 2. POST to the backend
-   * 3. Store result for display
-   */
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-
-    // Client-side guard — the backend also validates these
-    if (!repoUrl.trim() || !errorDescription.trim()) {
-      setResult({ ok: false, error: "Please fill in both fields before submitting." });
-      return;
-    }
-
-    setLoading(true);
-    setResult(null);
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-    const payload: SubmitPayload = {
-      repo_url: repoUrl.trim(),
-      error_description: errorDescription.trim(),
-    };
-
-    try {
-      const response = await fetch(`${apiUrl}/api/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const json = await response.json();
-
-      if (!response.ok) {
-        // FastAPI validation errors come back as { detail: string | [...] }
-        const detail = json?.detail;
-        const msg =
-          typeof detail === "string"
-            ? detail
-            : Array.isArray(detail)
-            ? detail.map((d: { msg: string }) => d.msg).join(", ")
-            : `HTTP ${response.status}`;
-        setResult({ ok: false, error: msg });
-      } else {
-        console.log("Raw response json:", json);
-        console.log("Raw file_list:", json.file_list);
-        setResult({ ok: true, data: json as SubmitResponse });
-      }
-    } catch (err) {
-      // Network error — backend likely not running
-      setResult({
-        ok: false,
-        error:
-          err instanceof Error
-            ? `Network error: ${err.message}`
-            : "Unknown network error. Is the backend running on port 8000?",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // ----- Render -------------------------------------------------------------
-
+export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-gray-950 flex flex-col items-center py-16 px-4">
-      <div className="w-full max-w-2xl flex-1">
-
-        {/* Header */}
-        <div className="mb-10 text-center">
-          <h1 className="text-4xl font-bold text-white tracking-tight">
-            Submit &amp; Heal 🩺
-          </h1>
-          <p className="mt-3 text-gray-400 text-base">
-            Paste your broken app&apos;s GitHub repo and describe the error.
-            <br />
-            An AI agent will diagnose and fix it.
-          </p>
+    <main className="min-h-screen bg-gray-950 flex flex-col font-sans text-gray-200">
+      {/* Navbar */}
+      <nav className="w-full max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
+        <div className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+          Submit & Heal 🩺
         </div>
-
-        {/* Form Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-xl">
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-
-            {/* GitHub Repo URL */}
-            <div>
-              <label
-                htmlFor="repo-url"
-                className="block text-sm font-medium text-gray-300 mb-2"
-              >
-                GitHub Repo URL
-              </label>
-              <input
-                id="repo-url"
-                type="url"
-                placeholder="https://github.com/your-org/broken-repo"
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                disabled={loading}
-                required
-                className="
-                  w-full px-4 py-3 rounded-lg
-                  bg-gray-800 border border-gray-700
-                  text-white placeholder-gray-500
-                  focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  transition-colors
-                "
-              />
-            </div>
-
-            {/* Error Description / Logs */}
-            <div>
-              <label
-                htmlFor="error-description"
-                className="block text-sm font-medium text-gray-300 mb-2"
-              >
-                Describe the error / paste error logs
-              </label>
-              <textarea
-                id="error-description"
-                rows={8}
-                placeholder={`TypeError: Cannot read properties of undefined (reading 'map')\n    at Component (/app/src/components/List.tsx:14:23)\n    at renderWithHooks ...`}
-                value={errorDescription}
-                onChange={(e) => setErrorDescription(e.target.value)}
-                disabled={loading}
-                required
-                className="
-                  w-full px-4 py-3 rounded-lg
-                  bg-gray-800 border border-gray-700
-                  text-white placeholder-gray-500
-                  font-mono text-sm
-                  focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  resize-y
-                  transition-colors
-                "
-              />
-            </div>
-
-            {/* Submit Button */}
-            <button
-              id="submit-button"
-              type="submit"
-              disabled={loading}
-              className="
-                w-full py-3 px-6 rounded-lg font-semibold text-white
-                bg-indigo-600 hover:bg-indigo-500
-                disabled:bg-indigo-800 disabled:cursor-not-allowed
-                focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-900
-                transition-colors duration-150
-              "
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  {/* Simple CSS spinner */}
-                  <svg
-                    className="animate-spin h-4 w-4 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12" cy="12" r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                    />
-                  </svg>
-                  Cloning &amp; Inspecting…
-                </span>
-              ) : (
-                "Submit"
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* Response Box */}
-        {result !== null && (
-          <div
-            id="response-box"
-            className={`
-              mt-6 rounded-2xl border p-6
-              ${result.ok
-                ? "bg-gray-900 border-gray-800"
-                : "bg-red-950/50 border-red-900/50"
-              }
-            `}
+        <div className="flex items-center gap-6 text-sm font-medium">
+          <a href="#how-it-works" className="text-gray-400 hover:text-white transition-colors">
+            How it works
+          </a>
+          <Link
+            href="/submit"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
           >
-            <h2
-              className={`text-sm font-semibold uppercase tracking-wider mb-4 ${
-                result.ok ? "text-green-400" : "text-red-400"
-              }`}
-            >
-              {result.ok ? "✅ Repository Inspected" : "❌ Error"}
-            </h2>
+            Start healing &rarr;
+          </Link>
+        </div>
+      </nav>
 
-            {result.ok ? (
-              <div className="space-y-5">
-                {/* Detected Stack Badge */}
-                {result.data.detected_stack && (
-                  <div className="flex items-center space-x-3">
-                    <span className="text-gray-400 text-sm font-medium">Detected Stack:</span>
-                    <span className="px-3 py-1 bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 rounded-full text-xs font-semibold uppercase tracking-wide">
-                      {result.data.detected_stack}
-                    </span>
-                  </div>
-                )}
+      {/* Hero Section */}
+      <section className="flex-1 flex flex-col items-center justify-center text-center px-4 py-20 mt-10">
+        <span className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-indigo-300 bg-indigo-900/30 border border-indigo-500/30 rounded-full mb-6 shadow-sm">
+          Multi-agent AI &bull; Autonomous debugging
+        </span>
+        <h1 className="text-5xl md:text-6xl font-extrabold text-white tracking-tight max-w-4xl leading-tight">
+          Your broken app, <span className="text-indigo-400 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">fixed in minutes</span>
+        </h1>
+        <p className="mt-6 text-lg text-gray-400 max-w-2xl leading-relaxed">
+          Paste a GitHub repo and describe the error. AI agents diagnose, fix, test, and deploy — no manual debugging needed.
+        </p>
+        <Link
+          href="/submit"
+          className="mt-10 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white text-lg font-semibold rounded-xl shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95"
+        >
+          Heal my app &rarr;
+        </Link>
+      </section>
 
-                {/* File List */}
-                {result.data.file_list && result.data.file_list.length > 0 && (
-                  <details className="group border border-gray-800 rounded-lg bg-gray-950/50 overflow-hidden">
-                    <summary className="px-4 py-3 cursor-pointer text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 flex justify-between items-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-                      <span>Repository Files ({result.data.file_list.length})</span>
-                      <span className="text-gray-500 group-open:rotate-180 transition-transform duration-200">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                      </span>
-                    </summary>
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-800 bg-gray-900">
-                      <ul className="text-xs font-mono text-gray-400 space-y-1.5 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                        {result.data.file_list.slice(0, 100).map((file, i) => (
-                          <li key={i} className="break-all" title={file}>
-                            {file}
-                          </li>
-                        ))}
-                        {result.data.file_list.length > 100 && (
-                          <li className="text-indigo-400 italic mt-2">
-                            Showing 100 of {result.data.file_list.length} files
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  </details>
-                )}
+      {/* Stats Row */}
+      <section className="w-full max-w-4xl mx-auto px-6 py-10 border-y border-gray-800/50 flex flex-col md:flex-row justify-center items-center gap-8 md:gap-24">
+        <div className="text-center">
+          <div className="text-3xl font-bold text-white">5</div>
+          <div className="text-sm text-gray-500 mt-1 uppercase tracking-wide font-medium">AI agents</div>
+        </div>
+        <div className="text-center">
+          <div className="text-3xl font-bold text-white">&lt;60s</div>
+          <div className="text-sm text-gray-500 mt-1 uppercase tracking-wide font-medium">Avg fix time</div>
+        </div>
+        <div className="text-center">
+          <div className="text-3xl font-bold text-white">3</div>
+          <div className="text-sm text-gray-500 mt-1 uppercase tracking-wide font-medium">Languages supported</div>
+        </div>
+      </section>
 
-                {/* README Preview */}
-                {result.data.readme_preview && (
-                  <div className="border border-gray-800 rounded-lg overflow-hidden flex flex-col bg-gray-950/50">
-                    <div className="bg-gray-800/50 px-4 py-2.5 border-b border-gray-800 text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                      README Preview
-                    </div>
-                    <div className="p-4 max-h-80 overflow-y-auto custom-scrollbar">
-                      <pre className="text-sm text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">
-                        {result.data.readme_preview}
-                      </pre>
-                    </div>
-                  </div>
-                )}
+      {/* How it works */}
+      <section id="how-it-works" className="w-full max-w-5xl mx-auto px-6 py-24">
+        <h2 className="text-center text-sm font-bold text-gray-500 uppercase tracking-widest mb-12">
+          How it works
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { step: "1", name: "Submit", desc: "Paste repo", icon: "📥" },
+            { step: "2", name: "Diagnose", desc: "Find root cause", icon: "🔍" },
+            { step: "3", name: "Fix", desc: "Patch code", icon: "🛠️" },
+            { step: "4", name: "Verify", desc: "Run sandbox", icon: "✅" },
+            { step: "5", name: "Deploy", desc: "Open PR", icon: "🚀" },
+          ].map((item, i) => (
+            <div key={i} className="flex flex-col items-center text-center p-4 rounded-2xl bg-gray-900/50 border border-gray-800 relative">
+              <div className="text-3xl mb-3">{item.icon}</div>
+              <div className="text-sm font-bold text-gray-200 mb-1">{item.name}</div>
+              <div className="text-xs text-gray-500">{item.desc}</div>
+              {i < 4 && (
+                <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 text-gray-700">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
-                {/* Diagnosis Section */}
-                {result.data.diagnosis && (
-                  <div className="border border-indigo-900/50 rounded-lg overflow-hidden flex flex-col bg-indigo-950/20 mt-6">
-                    <div className="bg-indigo-900/40 px-4 py-3 border-b border-indigo-900/50 flex justify-between items-center">
-                      <span className="text-sm font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        AI Diagnosis
-                      </span>
-                      <div className="flex gap-2 items-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                          result.data.diagnosis.error_category.includes('runtime') ? 'bg-red-900/50 text-red-300' :
-                          result.data.diagnosis.error_category.includes('config') ? 'bg-yellow-900/50 text-yellow-300' :
-                          result.data.diagnosis.error_category.includes('dependency') ? 'bg-orange-900/50 text-orange-300' :
-                          'bg-gray-800 text-gray-300'
-                        }`}>
-                          {result.data.diagnosis.error_category.replace('_', ' ')}
-                        </span>
-                        
-                        {/* Confidence Percentage Visualizer */}
-                        {result.data.diagnosis.confidence_percentage !== undefined && (
-                          <div className="flex items-center gap-1.5 bg-gray-900/50 px-2 py-0.5 rounded border border-gray-800">
-                            <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full ${
-                                  result.data.diagnosis.confidence_percentage > 75 ? 'bg-green-500' :
-                                  result.data.diagnosis.confidence_percentage >= 50 ? 'bg-yellow-500' :
-                                  'bg-red-500'
-                                }`}
-                                style={{ width: `${result.data.diagnosis.confidence_percentage}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] font-bold text-gray-400">
-                              {result.data.diagnosis.confidence_percentage}%
-                            </span>
-                          </div>
-                        )}
-
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                          result.data.diagnosis.confidence === 'high' ? 'bg-green-900/50 text-green-300' :
-                          result.data.diagnosis.confidence === 'medium' ? 'bg-yellow-900/50 text-yellow-300' :
-                          'bg-red-900/50 text-red-300'
-                        }`}>
-                          {result.data.diagnosis.confidence} confidence
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="p-5 space-y-4">
-                      {/* Root Cause */}
-                      <div>
-                        <h3 className="text-xs font-semibold text-indigo-400/80 uppercase tracking-wider mb-2">Root Cause</h3>
-                        <p className="text-base text-gray-200 leading-relaxed">
-                          {result.data.diagnosis.root_cause}
-                        </p>
-                        
-                        {/* Why it happened */}
-                        {result.data.diagnosis.why_it_happened && (
-                          <div className="border-l-2 border-indigo-500/30 pl-4 py-1 mt-3">
-                            <h4 className="text-[10px] font-semibold text-indigo-400/60 uppercase tracking-wider mb-1">Why this happened</h4>
-                            <p className="text-sm text-gray-400 italic leading-relaxed">
-                              {result.data.diagnosis.why_it_happened}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Fix Direction */}
-                      <div className="bg-indigo-900/20 border border-indigo-500/20 rounded-md p-4">
-                        <h3 className="text-xs font-semibold text-indigo-400/80 uppercase tracking-wider mb-2">Recommended Fix</h3>
-                        <p className="text-sm text-indigo-200/90 leading-relaxed">
-                          {result.data.diagnosis.fix_direction}
-                        </p>
-                      </div>
-
-                      {/* Affected Files */}
-                      {result.data.diagnosis.affected_files && result.data.diagnosis.affected_files.length > 0 && (
-                        <div>
-                          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Likely Affected Files</h3>
-                          <ul className="flex flex-wrap gap-2">
-                            {result.data.diagnosis.affected_files.map((f, i) => (
-                              <li key={i} className="px-2 py-1 bg-gray-900 border border-gray-800 rounded text-xs font-mono text-gray-400">
-                                {f}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Fix Section */}
-                {result.data.diagnosis && !result.data.fix && (
-                  <div className="mt-6 p-4 bg-yellow-900/20 rounded-lg border border-yellow-900/50">
-                    <p className="text-sm text-yellow-300 leading-relaxed">
-                      ⚠️ Confidence too low for auto-fix — please review the diagnosis manually
-                    </p>
-                  </div>
-                )}
-                
-                {result.data.fix && (
-                  <div className="border border-green-900/50 rounded-lg overflow-hidden flex flex-col bg-green-950/20 mt-6">
-                    <div className="bg-green-900/40 px-4 py-3 border-b border-green-900/50 flex justify-between items-center">
-                      <span className="text-sm font-bold text-green-300 uppercase tracking-wider flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
-                        Generated Fix
-                      </span>
-                      <div className="flex gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                          result.data.fix.confidence === 'high' ? 'bg-green-900/50 text-green-300' :
-                          result.data.fix.confidence === 'medium' ? 'bg-yellow-900/50 text-yellow-300' :
-                          'bg-red-900/50 text-red-300'
-                        }`}>
-                          {result.data.fix.confidence} confidence
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="p-5 space-y-6">
-                      <div className="bg-green-900/20 border border-green-500/20 rounded-md p-4">
-                        <p className="text-sm text-green-200/90 leading-relaxed font-semibold">
-                          {result.data.fix.patch_summary}
-                        </p>
-                      </div>
-
-                      {result.data.fix.patched_files && result.data.fix.patched_files.length === 0 && (
-                        <div className="text-sm text-red-300">Fix agent could not generate file patches.</div>
-                      )}
-
-                      {result.data.fix.patched_files && result.data.fix.patched_files.map((file, i) => (
-                        <div key={i} className="space-y-3">
-                          <h4 className="text-sm font-bold text-gray-300 border-b border-gray-800 pb-2">{file.file_path}</h4>
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="border border-red-900/30 rounded flex flex-col overflow-hidden">
-                              <div className="bg-red-900/20 px-3 py-1.5 border-b border-red-900/30 text-xs font-semibold text-red-400">Original</div>
-                              <pre className="p-3 bg-gray-950/50 text-xs text-gray-300 overflow-x-auto max-h-96 custom-scrollbar whitespace-pre-wrap">{file.original_content}</pre>
-                            </div>
-                            <div className="border border-green-900/30 rounded flex flex-col overflow-hidden">
-                              <div className="bg-green-900/20 px-3 py-1.5 border-b border-green-900/30 text-xs font-semibold text-green-400">Fixed</div>
-                              <pre className="p-3 bg-gray-950/50 text-xs text-gray-300 overflow-x-auto max-h-96 custom-scrollbar whitespace-pre-wrap">{file.patched_content}</pre>
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-400 italic bg-gray-900/50 p-2 rounded">{file.explanation}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Verification Section */}
-                {result.data.verify && (
-                  <div className={`border rounded-lg overflow-hidden flex flex-col mt-6 ${
-                    result.data.verify.verified 
-                      ? 'border-emerald-900/50 bg-emerald-950/20' 
-                      : result.data.verify.error 
-                        ? 'border-red-900/50 bg-red-950/20'
-                        : 'border-yellow-900/50 bg-yellow-950/20'
-                  }`}>
-                    <div className={`px-4 py-3 border-b flex justify-between items-center ${
-                      result.data.verify.verified 
-                        ? 'bg-emerald-900/40 border-emerald-900/50' 
-                        : result.data.verify.error 
-                          ? 'bg-red-900/40 border-red-900/50'
-                          : 'bg-yellow-900/40 border-yellow-900/50'
-                    }`}>
-                      <span className={`text-sm font-bold uppercase tracking-wider flex items-center gap-2 ${
-                        result.data.verify.verified 
-                          ? 'text-emerald-300' 
-                          : result.data.verify.error 
-                            ? 'text-red-300'
-                            : 'text-yellow-300'
-                      }`}>
-                        {result.data.verify.verified 
-                          ? '✅ Fix Verified — Your code runs successfully!' 
-                          : result.data.verify.error 
-                            ? '❌ Fix needs review — code still has issues'
-                            : '⚠️ Auto-verification skipped'}
-                      </span>
-                    </div>
-                    
-                    <div className="p-5 space-y-4">
-                      {/* Friendly Explanation */}
-                      <p className="text-sm text-gray-300 leading-relaxed">
-                        {result.data.verify.verified
-                          ? "Our AI sandbox executed your fixed code and confirmed it runs without errors. The fix is safe to deploy."
-                          : result.data.verify.error
-                            ? "Our sandbox ran the fixed code but it still produced errors. The fix may be incomplete. Review the diagnosis and consider fixing manually."
-                            : "Automatic code execution is not yet supported for this language. The fix looks correct based on AI analysis, but we recommend testing it manually before deploying."}
-                      </p>
-                      
-                      {/* Program Output for Success or skipped (though skipped usually has no output) */}
-                      {(result.data.verify.verified || (!result.data.verify.error && !result.data.verify.verified)) && (
-                        <div className="space-y-2">
-                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">📤 Program Output (what your fixed code prints):</h4>
-                          <pre className="p-3 bg-gray-950/50 text-xs text-gray-300 overflow-x-auto max-h-60 custom-scrollbar whitespace-pre-wrap border border-gray-800 rounded">
-                            {result.data.verify.output ? result.data.verify.output : "No output — code ran silently without errors"}
-                          </pre>
-                        </div>
-                      )}
-                      
-                      {/* Error Output for Failure */}
-                      {result.data.verify.error && (
-                        <div className="space-y-2">
-                          <h4 className="text-xs font-semibold text-red-400/80 uppercase tracking-wider">⚠️ Error Output:</h4>
-                          <pre className="p-3 bg-red-950/20 text-xs text-red-300 overflow-x-auto max-h-60 custom-scrollbar whitespace-pre-wrap border border-red-900/30 rounded">{result.data.verify.error}</pre>
-                        </div>
-                      )}
-                      
-                      {/* General Info Note */}
-                      <div className="mt-4 pt-4 border-t border-gray-800/50 flex items-center justify-between">
-                        <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                          <span>🔒</span> Your code runs in an isolated sandbox — nothing affects your real repository
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="p-4 bg-red-900/20 rounded-lg border border-red-900/50">
-                <p className="text-sm text-red-300 leading-relaxed">{result.error}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-        
-      {/* Footer hint */}
-      <p className="mt-8 text-center text-xs text-gray-600">
-        Backend: <code className="text-gray-500">{process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}</code>
-      </p>
+      {/* Footer */}
+      <footer className="w-full text-center py-8 border-t border-gray-900 mt-auto">
+        <p className="text-xs text-gray-600 font-medium">
+          Built with Next.js, FastAPI, Gemini AI, E2B
+        </p>
+      </footer>
     </main>
   );
 }
