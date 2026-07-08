@@ -8,8 +8,10 @@ class DiagnosisResult(BaseModel):
     root_cause: str
     affected_files: list[str]
     confidence: str
+    confidence_percentage: int
     fix_direction: str
     error_category: str
+    why_it_happened: str
 
 async def diagnose(repo_info: dict, error_description: str) -> DiagnosisResult:
     """
@@ -23,8 +25,10 @@ async def diagnose(repo_info: dict, error_description: str) -> DiagnosisResult:
                 root_cause="Diagnosis failed: GEMINI_API_KEY not found in environment.",
                 affected_files=[],
                 confidence="low",
+                confidence_percentage=0,
                 fix_direction="Check the backend .env file and ensure the API key is set.",
-                error_category="config_error"
+                error_category="config_error",
+                why_it_happened="The Gemini API key is missing, so the agent cannot communicate with the AI model to diagnose the issue."
             )
 
         client = genai.Client(api_key=api_key)
@@ -91,8 +95,10 @@ Your response MUST be ONLY valid JSON matching this exact structure:
   "root_cause": "plain English explanation of what's broken",
   "affected_files": ["file1.js", "file2.py"],
   "confidence": "high", // or "medium" or "low"
+  "confidence_percentage": 95, // Give a numeric confidence score 0-100. If confidence string is high give 85-100, medium give 50-84, low give 0-49
   "fix_direction": "what kind of fix is needed, in plain English",
-  "error_category": "runtime_error" // e.g. "runtime_error", "config_error", "dependency_error", "logic_error", "network_error"
+  "error_category": "runtime_error", // e.g. "runtime_error", "config_error", "dependency_error", "logic_error", "network_error"
+  "why_it_happened": "Explain in 2-3 sentences WHY this bug occurred at a deeper level — the underlying language/framework behavior that caused it, not just what the error message says"
 }}
 Do not include any preamble, markdown formatting (like ```json), or trailing text. Return ONLY the raw JSON object.
 """

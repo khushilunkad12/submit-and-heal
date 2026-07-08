@@ -340,7 +340,7 @@ export default function Home() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         AI Diagnosis
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                           result.data.diagnosis.error_category.includes('runtime') ? 'bg-red-900/50 text-red-300' :
                           result.data.diagnosis.error_category.includes('config') ? 'bg-yellow-900/50 text-yellow-300' :
@@ -349,6 +349,26 @@ export default function Home() {
                         }`}>
                           {result.data.diagnosis.error_category.replace('_', ' ')}
                         </span>
+                        
+                        {/* Confidence Percentage Visualizer */}
+                        {result.data.diagnosis.confidence_percentage !== undefined && (
+                          <div className="flex items-center gap-1.5 bg-gray-900/50 px-2 py-0.5 rounded border border-gray-800">
+                            <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full ${
+                                  result.data.diagnosis.confidence_percentage > 75 ? 'bg-green-500' :
+                                  result.data.diagnosis.confidence_percentage >= 50 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${result.data.diagnosis.confidence_percentage}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-400">
+                              {result.data.diagnosis.confidence_percentage}%
+                            </span>
+                          </div>
+                        )}
+
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                           result.data.diagnosis.confidence === 'high' ? 'bg-green-900/50 text-green-300' :
                           result.data.diagnosis.confidence === 'medium' ? 'bg-yellow-900/50 text-yellow-300' :
@@ -366,6 +386,16 @@ export default function Home() {
                         <p className="text-base text-gray-200 leading-relaxed">
                           {result.data.diagnosis.root_cause}
                         </p>
+                        
+                        {/* Why it happened */}
+                        {result.data.diagnosis.why_it_happened && (
+                          <div className="border-l-2 border-indigo-500/30 pl-4 py-1 mt-3">
+                            <h4 className="text-[10px] font-semibold text-indigo-400/60 uppercase tracking-wider mb-1">Why this happened</h4>
+                            <p className="text-sm text-gray-400 italic leading-relaxed">
+                              {result.data.diagnosis.why_it_happened}
+                            </p>
+                          </div>
+                        )}
                       </div>
                       
                       {/* Fix Direction */}
