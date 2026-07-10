@@ -1,6 +1,7 @@
 export interface SubmitPayload {
   repo_url: string;
   error_description: string;
+  github_token?: string;
 }
 
 export interface DiagnosisResult {
@@ -11,6 +12,7 @@ export interface DiagnosisResult {
   fix_direction: string;
   error_category: string;
   why_it_happened: string;
+  bug_found: boolean;
 }
 
 export interface PatchedFile {
@@ -34,6 +36,16 @@ export interface VerifyResult {
   summary: string;
 }
 
+export interface DeployResult {
+  success: boolean;
+  pr_url: string;
+  branch_name: string;
+  pr_title: string;
+  pr_body: string;
+  preview_url: string;
+  message: string;
+}
+
 export interface SubmitResponse {
   status: string;
   repo_url?: string;
@@ -45,4 +57,5 @@ export interface SubmitResponse {
   diagnosis?: DiagnosisResult;
   fix?: FixResult;
   verify?: VerifyResult;
+  deploy?: DeployResult;
 }

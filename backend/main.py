@@ -18,6 +18,7 @@ from typing import Optional, List
 from agents.diagnosis_agent import diagnose, DiagnosisResult
 from agents.fix_agent import generate_fix, FixResult
 from agents.verify_agent import verify_fix, VerifyResult
+from agents.deploy_agent import create_pr, DeployResult
 
 # Load environment variables from .env
 load_dotenv()
@@ -53,6 +54,7 @@ class SubmitRequest(BaseModel):
     """
     repo_url: str
     error_description: str
+    github_token: Optional[str] = None
 
 
 class SubmitResponse(BaseModel):
@@ -69,6 +71,7 @@ class SubmitResponse(BaseModel):
     diagnosis: Optional[DiagnosisResult] = None
     fix: Optional[FixResult] = None
     verify: Optional[VerifyResult] = None
+    deploy: Optional[DeployResult] = None
 
 
 # ---------------------------------------------------------------------------
@@ -236,10 +239,21 @@ async def submit(payload: SubmitRequest):
         # Call the fix agent if confidence is high or medium
         fix_result = None
         verify_result = None
-        if diagnosis_result.confidence in ["high", "medium"]:
+        deploy_result = None
+        
+        if diagnosis_result.bug_found and diagnosis_result.confidence in ["high", "medium"]:
             fix_result = await generate_fix(temp_dir, diagnosis_result.model_dump())
             if fix_result and fix_result.confidence in ["high", "medium"]:
-                verify_result = await verify_fix(fix_result.model_dump())
+                verify_result = await verify_fix(fix_result.model_dump(), repo_info.get("files_content"))
+                
+                # Call deploy agent if fix is verified and github token is provided
+                if verify_result and verify_result.verified and payload.github_token:
+                    deploy_result = await create_pr(
+                        repo_url, 
+                        fix_result.model_dump(), 
+                        diagnosis_result.model_dump(), 
+                        payload.github_token
+                    )
         
         return SubmitResponse(
             status="success",
@@ -251,5 +265,6 @@ async def submit(payload: SubmitRequest):
             readme_preview=readme_content,
             diagnosis=diagnosis_result,
             fix=fix_result,
-            verify=verify_result
+            verify=verify_result,
+            deploy=deploy_result
         )

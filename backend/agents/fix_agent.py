@@ -81,7 +81,15 @@ Your response MUST be ONLY valid JSON matching this exact structure:
   "patch_summary": "overall summary of all changes made",
   "confidence": "high" // or "medium" or "low"
 }}
-Do not include any preamble, markdown formatting (like ```json), or trailing text. Return ONLY the raw JSON object.
+Do not include any preamble, markdown formatting (like ```json), or trailing text. Return ONLY the raw JSON object. Do not include markdown formatting or explanations outside the JSON.
+
+IMPORTANT: You must fix ALL files that contribute to the bug, not just the file where the error occurs. 
+
+For example if main.py calls divide() from calculator.py and calculator.py has no null check, you must fix BOTH:
+- calculator.py (add the null check)
+- main.py (handle the return value)
+
+Always trace the full call chain and fix every file involved. A partial fix that only patches one file in a multi-file bug is considered a failed fix.
 """
 
         response = await client.aio.models.generate_content(

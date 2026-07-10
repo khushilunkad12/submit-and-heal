@@ -53,6 +53,7 @@ export default function LandingPage() {
         <div className="text-center">
           <div className="text-3xl font-bold text-white">3</div>
           <div className="text-sm text-gray-500 mt-1 uppercase tracking-wide font-medium">Languages supported</div>
+          <div className="text-xs text-gray-600 mt-1 font-medium">Python, Java, JavaScript</div>
         </div>
       </section>
 

@@ -10,6 +10,7 @@ export default function SubmitPage() {
   
   const [repoUrl, setRepoUrl] = useState<string>("");
   const [errorDescription, setErrorDescription] = useState<string>("");
+  const [githubToken, setGithubToken] = useState<string>("");
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,6 +22,7 @@ export default function SubmitPage() {
     const payload: SubmitPayload = {
       repo_url: repoUrl.trim(),
       error_description: errorDescription.trim(),
+      github_token: githubToken.trim() || undefined,
     };
 
     // Save payload to session storage so /healing can access it
@@ -107,6 +109,33 @@ export default function SubmitPage() {
                   transition-colors
                 "
               />
+            </div>
+
+            {/* GitHub Token (Optional) */}
+            <div>
+              <label
+                htmlFor="github-token"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                GitHub Personal Access Token (optional)
+              </label>
+              <input
+                id="github-token"
+                type="password"
+                placeholder="ghp_... (required to open a PR)"
+                value={githubToken}
+                onChange={(e) => setGithubToken(e.target.value)}
+                className="
+                  w-full px-4 py-3 rounded-lg
+                  bg-gray-800 border border-gray-700
+                  text-white placeholder-gray-500
+                  focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                  transition-colors
+                "
+              />
+              <p className="mt-2 text-xs text-gray-500">
+                Create a token at github.com/settings/tokens with 'repo' scope. We never store your token.
+              </p>
             </div>
 
             {/* Submit Button */}

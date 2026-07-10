@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SubmitResponse } from "../types";
 
+const getCategoryTooltip = (cat: string) => {
+  const c = cat.toLowerCase();
+  if (c.includes('runtime')) return "Bug that occurs while the program is running, not during compilation";
+  if (c.includes('config')) return "Problem with settings, environment variables, or configuration files";
+  if (c.includes('dependency')) return "Issue with a missing or incompatible library or package";
+  if (c.includes('logic')) return "Code runs without crashing but produces wrong results";
+  if (c.includes('network')) return "Problem with API calls, connections, or external services";
+  return "Error category determined by AI analysis";
+};
+
 export default function ResultsPage() {
   const router = useRouter();
   const [result, setResult] = useState<SubmitResponse | null>(null);
@@ -32,7 +42,32 @@ export default function ResultsPage() {
     );
   }
 
-  const { diagnosis, fix, verify } = result;
+  const { diagnosis, fix, verify, deploy } = result;
+
+  const handleDownloadPatch = () => {
+    if (!result || !diagnosis || !fix) return;
+    
+    let content = `=== SUBMIT & HEAL PATCH ===\nGenerated: ${new Date().toISOString()}\nRepository: ${result.repo_url || 'Unknown'}\n\n`;
+    content += `ROOT CAUSE:\n${diagnosis.root_cause}\n\n`;
+    content += `WHY IT HAPPENED:\n${diagnosis.why_it_happened}\n\n`;
+    content += `CONFIDENCE: ${diagnosis.confidence_percentage}%\n\n`;
+    
+    for (const f of fix.patched_files) {
+      content += `=== FILE: ${f.file_path} ===\n--- ORIGINAL ---\n${f.original_content}\n\n+++ FIXED +++\n${f.patched_content}\n\nCHANGE EXPLANATION:\n${f.explanation}\n\n`;
+    }
+    
+    content += `=== END PATCH ===`;
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `submit-heal-patch-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <main className="min-h-screen bg-gray-950 font-sans text-gray-200 px-4 py-10 pb-24">
@@ -62,22 +97,48 @@ export default function ResultsPage() {
 
             {/* Card 2: Error Category */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md flex flex-col h-full">
-              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Error Category</h3>
-              <div className="mt-auto">
-                <span className={`inline-block px-3 py-1 rounded text-xs font-bold uppercase tracking-wider ${
-                  diagnosis.error_category.includes('runtime') ? 'bg-red-900/50 text-red-300 border border-red-500/30' :
-                  diagnosis.error_category.includes('config') ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-500/30' :
-                  'bg-indigo-900/50 text-indigo-300 border border-indigo-500/30'
-                }`}>
-                  {diagnosis.error_category.replace('_', ' ')}
-                </span>
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                {diagnosis.bug_found === false ? 'Status' : 'Error Category'}
+              </h3>
+              <div className="mt-auto group relative inline-block w-fit">
+                {diagnosis.bug_found === false ? (
+                  <span className="inline-block px-3 py-1 rounded text-xs font-bold uppercase tracking-wider bg-emerald-900/50 text-emerald-300 border border-emerald-500/30">
+                    BUG FREE
+                  </span>
+                ) : (
+                  <>
+                    <span 
+                      title={getCategoryTooltip(diagnosis.error_category)}
+                      className={`inline-block px-3 py-1 rounded text-xs font-bold uppercase tracking-wider underline decoration-dotted underline-offset-4 cursor-help ${
+                        diagnosis.error_category.includes('runtime') ? 'bg-red-900/50 text-red-300 border border-red-500/30' :
+                        diagnosis.error_category.includes('config') ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-500/30' :
+                        'bg-indigo-900/50 text-indigo-300 border border-indigo-500/30'
+                      }`}
+                    >
+                      {diagnosis.error_category.replace('_', ' ')}
+                    </span>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-2 bg-gray-800 border border-gray-700 text-xs text-gray-200 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 shadow-lg text-center normal-case tracking-normal">
+                      {getCategoryTooltip(diagnosis.error_category)}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             {/* Card 3: Confidence */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-md flex flex-col h-full">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center justify-between">
-                <span>AI Confidence</span>
+                <div className="group relative inline-block">
+                  <span 
+                    className="underline decoration-dotted underline-offset-4 cursor-help" 
+                    title="How certain the AI is about this diagnosis. Based on how clearly the error matches patterns in the code. Higher = more reliable fix."
+                  >
+                    AI Confidence
+                  </span>
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-2 bg-gray-800 border border-gray-700 text-xs text-gray-200 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 shadow-lg text-center normal-case tracking-normal font-normal">
+                    How certain the AI is about this diagnosis. Based on how clearly the error matches patterns in the code. Higher = more reliable fix.
+                  </div>
+                </div>
                 <span className={`${
                   diagnosis.confidence === 'high' ? 'text-green-400' :
                   diagnosis.confidence === 'medium' ? 'text-yellow-400' : 'text-red-400'
@@ -126,7 +187,32 @@ export default function ResultsPage() {
           </div>
         )}
 
-        {/* Code Diffs Section */}
+        {/* Bug-Free Success State */}
+        {diagnosis?.bug_found === false && (
+          <section className="pb-8">
+            <div className="w-full bg-emerald-950/20 border border-emerald-900/50 rounded-2xl p-10 text-center flex flex-col items-center shadow-lg">
+              <div className="w-16 h-16 bg-emerald-900/40 rounded-full flex items-center justify-center mb-6">
+                <span className="text-3xl">🎉</span>
+              </div>
+              <h2 className="text-2xl font-bold text-emerald-400 mb-4">
+                All Clear! No bugs detected.
+              </h2>
+              <p className="text-gray-300 max-w-2xl text-lg leading-relaxed mb-8">
+                We analyzed your repository and the code handles the reported issue correctly. It is completely bug-free and no fixes are required.
+              </p>
+              <Link 
+                href="/submit"
+                className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-900/20"
+              >
+                Submit another repository
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {diagnosis?.bug_found !== false && (
+          <>
+            {/* Code Diffs Section */}
         {fix?.patched_files && fix.patched_files.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-white tracking-tight mb-4">
@@ -180,12 +266,12 @@ export default function ResultsPage() {
             <h2 className="text-xl font-bold text-white tracking-tight mb-4 flex items-center gap-2">
               Verification <span className="text-gray-500 font-normal">| Sandbox Execution</span>
             </h2>
-            <div className={`border rounded-2xl overflow-hidden flex flex-col ${
+            <div className={`border rounded-2xl flex flex-col ${
               verify.verified ? 'border-emerald-900/50 bg-emerald-950/10' :
               verify.error ? 'border-red-900/50 bg-red-950/10' :
               'border-yellow-900/50 bg-yellow-950/10'
             }`}>
-              <div className={`px-6 py-4 border-b flex justify-between items-center ${
+              <div className={`px-6 py-4 rounded-t-2xl border-b flex justify-between items-center ${
                 verify.verified ? 'bg-emerald-900/20 border-emerald-900/50' :
                 verify.error ? 'bg-red-900/20 border-red-900/50' :
                 'bg-yellow-900/20 border-yellow-900/50'
@@ -195,9 +281,23 @@ export default function ResultsPage() {
                   verify.error ? 'text-red-400' :
                   'text-yellow-400'
                 }`}>
-                  {verify.verified ? '✅ Fix Verified — Your code runs successfully!' :
-                   verify.error ? '❌ Fix needs review — code still has issues' :
-                   '⚠️ Auto-verification skipped'}
+                  {verify.verified ? (
+                    <div className="group relative inline-block">
+                      <span 
+                        className="underline decoration-dotted underline-offset-4 cursor-help" 
+                        title="We actually ran your fixed code in a secure isolated environment and confirmed it executes without errors"
+                      >
+                        ✅ Fix Verified — Your code runs successfully!
+                      </span>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 p-2 bg-gray-800 border border-gray-700 text-xs text-gray-200 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 shadow-lg text-center normal-case tracking-normal font-normal">
+                        We actually ran your fixed code in a secure isolated environment and confirmed it executes without errors
+                      </div>
+                    </div>
+                  ) : verify.error ? (
+                    '❌ Fix needs review — code still has issues'
+                  ) : (
+                    '⚠️ Auto-verification skipped'
+                  )}
                 </span>
               </div>
               
@@ -239,7 +339,19 @@ export default function ResultsPage() {
                 )}
                 
                 <p className="text-xs text-gray-500 flex items-center gap-1.5 pt-4 border-t border-gray-800/50">
-                  <span>🔒</span> Your code runs in an isolated sandbox — nothing affects your real repository
+                  <span>🔒</span> 
+                  <span className="group relative inline-block">
+                    <span 
+                      className="underline decoration-dotted underline-offset-4 cursor-help" 
+                      title="Your code runs in a temporary container that is completely separate from your real repository. Nothing is changed until you approve the PR."
+                    >
+                      Your code runs in an isolated sandbox
+                    </span>
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 border border-gray-700 text-xs text-gray-200 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 shadow-lg text-center normal-case tracking-normal">
+                      Your code runs in a temporary container that is completely separate from your real repository. Nothing is changed until you approve the PR.
+                    </span>
+                  </span>
+                  <span>— nothing affects your real repository</span>
                 </p>
               </div>
             </div>
@@ -248,26 +360,73 @@ export default function ResultsPage() {
 
         {/* Deploy Section & Footer Action */}
         <section className="pt-8 border-t border-gray-800/50 flex flex-col items-center">
-          <div className="flex flex-wrap items-center justify-center gap-4 mb-8">
-            <button 
-              disabled 
-              className="px-6 py-3 bg-indigo-600/50 text-white/50 font-medium rounded-lg cursor-not-allowed border border-indigo-500/20 flex items-center gap-2"
-              title="Coming soon!"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-              Open PR on GitHub
-            </button>
-            <button className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg border border-gray-700 transition-colors flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              Download patch
-            </button>
-          </div>
+          
+          {deploy?.success ? (
+            <div className="w-full max-w-2xl bg-emerald-950/20 border border-emerald-900/50 rounded-2xl p-6 mb-8 text-center flex flex-col items-center">
+              <span className="text-emerald-400 font-bold text-lg mb-2 flex items-center gap-2">
+                ✅ Pull Request Created!
+              </span>
+              <p className="text-gray-300 text-sm mb-6">
+                We've successfully opened a PR on your repository containing this fix.
+              </p>
+              
+              <div className="flex flex-wrap items-center justify-center gap-4">
+                <a 
+                  href={deploy.pr_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                  View PR on GitHub &rarr;
+                </a>
+              </div>
+              <p className="text-xs text-gray-500 mt-4 font-mono">Branch: {deploy.branch_name}</p>
+            </div>
+          ) : deploy?.success === false ? (
+            <div className="w-full max-w-2xl bg-red-950/20 border border-red-900/50 rounded-2xl p-6 mb-8 text-center flex flex-col items-center">
+              <span className="text-red-400 font-bold text-lg mb-2 flex items-center gap-2">
+                ❌ Deployment Failed
+              </span>
+              <p className="text-red-300/80 text-sm mb-6">
+                {deploy.message}
+              </p>
+              <Link 
+                href="/submit"
+                className="px-6 py-3 bg-red-900/50 hover:bg-red-800/50 text-red-200 font-medium rounded-lg border border-red-800 transition-colors"
+              >
+                Try again
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center mb-8">
+              <div className="flex flex-wrap items-center justify-center gap-4">
+                <button 
+                  disabled 
+                  className="px-6 py-3 bg-indigo-600/50 text-white/50 font-medium rounded-lg cursor-not-allowed border border-indigo-500/20 flex items-center gap-2"
+                  title="Coming soon!"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                  Open PR on GitHub
+                </button>
+                <button onClick={handleDownloadPatch} className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg border border-gray-700 transition-colors flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download patch
+                </button>
+              </div>
+              <p className="mt-4 text-xs text-indigo-400/80 bg-indigo-950/30 px-4 py-2 rounded-full border border-indigo-900/50">
+                💡 Add your GitHub token on the submit page to auto-create a PR
+              </p>
+            </div>
+          )}
           
           <Link href="/submit" className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             Start a new healing
           </Link>
         </section>
+          </>
+        )}
 
       </div>
     </main>

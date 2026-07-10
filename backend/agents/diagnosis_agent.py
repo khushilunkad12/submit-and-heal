@@ -12,6 +12,7 @@ class DiagnosisResult(BaseModel):
     fix_direction: str
     error_category: str
     why_it_happened: str
+    bug_found: bool
 
 async def diagnose(repo_info: dict, error_description: str) -> DiagnosisResult:
     """
@@ -28,7 +29,8 @@ async def diagnose(repo_info: dict, error_description: str) -> DiagnosisResult:
                 confidence_percentage=0,
                 fix_direction="Check the backend .env file and ensure the API key is set.",
                 error_category="config_error",
-                why_it_happened="The Gemini API key is missing, so the agent cannot communicate with the AI model to diagnose the issue."
+                why_it_happened="The Gemini API key is missing, so the agent cannot communicate with the AI model to diagnose the issue.",
+                bug_found=True
             )
 
         client = genai.Client(api_key=api_key)
@@ -60,8 +62,9 @@ Follow this reasoning order:
 1. FIRST: Analyze the actual code files and file structure provided to identify what bugs genuinely exist in the code.
 2. SECOND: Check if the user's error description matches what you found in the code.
 3. If they MATCH: Diagnose normally with high confidence.
-4. If they DON'T MATCH: Trust the code analysis, not the user's description. Set confidence to "medium" and mention in root_cause that the described error doesn't match the actual code issue found (e.g. "The described error does not match the actual bug found in the code: [real bug explanation here]").
-5. If the code files are too vague to analyze: Then fall back to the user's error description with low confidence.
+4. If they DON'T MATCH because the code actually has a different bug: Trust the code analysis, not the user's description. Set confidence to "medium" and mention in root_cause that the described error doesn't match the actual bug found in the code. Set bug_found to true.
+5. If they DON'T MATCH because the code is actually CORRECT and BUG-FREE: Set bug_found to false. Explain in root_cause that the code handles the described issue correctly and is bug-free.
+6. If the code files are too vague to analyze: Then fall back to the user's error description with low confidence and bug_found to true.
 
 Detected Stack: {detected_stack}
 
@@ -80,14 +83,12 @@ Repository Code Files:
 IMPORTANT: Always analyze the actual code content first. 
 The user's error description may be inaccurate or incomplete. 
 Your diagnosis must be based primarily on what you see in the code, 
-not just what the user described.
-
-Follow this reasoning order:
 1. FIRST: Analyze the actual code files and file structure provided to identify what bugs genuinely exist in the code
 2. SECOND: Check if the user's error description matches what you found in the code
 3. If they MATCH: Diagnose normally with high confidence
-4. If they DON'T MATCH: Trust the code analysis, not the user's description. Set confidence to "medium" and mention in root_cause that the described error doesn't match the actual code issue found.
-5. If the code files are too vague to analyze: Then fall back to the user's error description with low confidence
+4. If they DON'T MATCH because the code actually has a different bug: Trust the code analysis, not the user's description. Set confidence to "medium" and mention in root_cause that the described error doesn't match the actual code issue found. Set bug_found to true.
+5. If they DON'T MATCH because the code is actually CORRECT and BUG-FREE: Set bug_found to false. Explain in root_cause that the code handles the described issue correctly and is bug-free.
+6. If the code files are too vague to analyze: Then fall back to the user's error description with low confidence.
 
 Based on this limited information, provide a diagnosis.
 Your response MUST be ONLY valid JSON matching this exact structure:
@@ -98,7 +99,8 @@ Your response MUST be ONLY valid JSON matching this exact structure:
   "confidence_percentage": 95, // Give a numeric confidence score 0-100. If confidence string is high give 85-100, medium give 50-84, low give 0-49
   "fix_direction": "what kind of fix is needed, in plain English",
   "error_category": "runtime_error", // e.g. "runtime_error", "config_error", "dependency_error", "logic_error", "network_error"
-  "why_it_happened": "Explain in 2-3 sentences WHY this bug occurred at a deeper level — the underlying language/framework behavior that caused it, not just what the error message says"
+  "why_it_happened": "Explain in 2-3 sentences WHY this bug occurred at a deeper level — the underlying language/framework behavior that caused it, not just what the error message says",
+  "bug_found": true // boolean, set to false ONLY if the code is completely bug-free and correct
 }}
 Do not include any preamble, markdown formatting (like ```json), or trailing text. Return ONLY the raw JSON object.
 """
@@ -140,6 +142,9 @@ Do not include any preamble, markdown formatting (like ```json), or trailing tex
             root_cause=f"AI Diagnosis failed due to an internal error: {str(e)}",
             affected_files=[],
             confidence="low",
+            confidence_percentage=0,
             fix_direction="Check the backend logs for detailed error trace.",
-            error_category="config_error"
+            error_category="config_error",
+            why_it_happened="An internal error occurred during the API call.",
+            bug_found=True
         )

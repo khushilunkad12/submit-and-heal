@@ -1,7 +1,14 @@
 import os
 from dotenv import load_dotenv
+import re
 from pydantic import BaseModel
 import e2b_code_interpreter
+
+def strip_ansi(text: str) -> str:
+    if not text:
+        return ""
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 # Load environment variables to ensure E2B SDK picks up E2B_API_KEY
 load_dotenv()
@@ -12,7 +19,7 @@ class VerifyResult(BaseModel):
     verified: bool
     summary: str
 
-async def verify_fix(fix_result: dict) -> VerifyResult:
+async def verify_fix(fix_result: dict, files_content: dict = None) -> VerifyResult:
     """
     Runs the patched code in an E2B secure sandbox to verify it works.
     """
@@ -36,15 +43,37 @@ async def verify_fix(fix_result: dict) -> VerifyResult:
             summary="No patched files to verify."
         )
 
-    # The target execution file is assumed to be the first one in the list for now
-    target_file = patched_files[0]
+    target_file = None
+    for pf in patched_files:
+        ext = os.path.splitext(pf.get("file_path", ""))[1].lower()
+        if ext in [".py", ".js", ".ts", ".java"]:
+            target_file = pf
+            break
+            
+    if not target_file:
+        return VerifyResult(
+            success=False,
+            output="",
+            error="",
+            verified=False,
+            summary="Auto-verification skipped: No executable code files (.py, .js, .ts, .java) were patched."
+        )
+
     entry_file_path = target_file.get("file_path", "")
     extension = os.path.splitext(entry_file_path)[1].lower()
 
     try:
         if extension in [".py", ".js", ".ts", ".java"]:
             with e2b_code_interpreter.Sandbox.create() as sandbox:
-                # Write all patched files to the sandbox so relative imports work
+                # 1. Write all original files to the sandbox so cross-file imports work
+                if files_content:
+                    for fpath, fcontent in files_content.items():
+                        dir_name = os.path.dirname(fpath)
+                        if dir_name:
+                            sandbox.commands.run(f"mkdir -p {dir_name}")
+                        sandbox.files.write(fpath, fcontent)
+
+                # 2. Overwrite with patched files
                 for pf in patched_files:
                     fpath = pf.get("file_path", "")
                     fcontent = pf.get("patched_content", "")
@@ -58,15 +87,12 @@ async def verify_fix(fix_result: dict) -> VerifyResult:
 
                 # Run the entry file
                 if extension == ".py":
-                    patched_content = target_file.get("patched_content", "")
-                    execution = sandbox.run_code(patched_content)
+                    execution = sandbox.run_code(f"!python {entry_file_path}")
 
                     # Capture stdout correctly
                     output = ""
                     if execution.logs.stdout:
                         output = "\\n".join(execution.logs.stdout)
-                    elif hasattr(execution, 'text') and execution.text:
-                        output = execution.text
                         
                     # Capture stderr correctly  
                     error = ""
@@ -80,15 +106,15 @@ async def verify_fix(fix_result: dict) -> VerifyResult:
                     if error:
                         return VerifyResult(
                             success=False,
-                            output=output,
-                            error=error,
+                            output=strip_ansi(output),
+                            error=strip_ansi(error),
                             verified=False,
                             summary="Code execution failed with errors."
                         )
                     else:
                         return VerifyResult(
                             success=True,
-                            output=output or "Code executed successfully (no output).",
+                            output=strip_ansi(output) or "Code executed successfully (no output).",
                             error="",
                             verified=True,
                             summary="Code verified successfully in Python sandbox."
@@ -99,15 +125,15 @@ async def verify_fix(fix_result: dict) -> VerifyResult:
                     if result.exit_code != 0:
                         return VerifyResult(
                             success=False,
-                            output=result.stdout,
-                            error=result.stderr,
+                            output=strip_ansi(result.stdout),
+                            error=strip_ansi(result.stderr),
                             verified=False,
                             summary="Code execution failed with errors."
                         )
                     else:
                         return VerifyResult(
                             success=True,
-                            output=result.stdout or "Code executed successfully (no output).",
+                            output=strip_ansi(result.stdout) or "Code executed successfully (no output).",
                             error="",
                             verified=True,
                             summary="Code verified successfully in Node.js sandbox."
@@ -151,15 +177,15 @@ async def verify_fix(fix_result: dict) -> VerifyResult:
                     if error.strip():
                         return VerifyResult(
                             success=False,
-                            output=output,
-                            error=error,
+                            output=strip_ansi(output),
+                            error=strip_ansi(error),
                             verified=False,
                             summary="Code execution failed with errors."
                         )
                     else:
                         return VerifyResult(
                             success=True,
-                            output=output or "Code executed successfully (no output).",
+                            output=strip_ansi(output) or "Code executed successfully (no output).",
                             error="",
                             verified=True,
                             summary="Code verified successfully in Java sandbox."
