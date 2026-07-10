@@ -68,6 +68,9 @@ When generating fixes:
 - Add a brief comment explaining why the change was made
 
 Return the COMPLETE fixed file content in patched_content, not just the changed lines.
+
+IMPORTANT for JavaScript: Every file that originally had a module.exports line MUST keep it in the fixed version. Never remove or forget module.exports when fixing JavaScript files. Check every patched file and ensure module.exports is present if it was in the original.
+
 Your response MUST be ONLY valid JSON matching this exact structure:
 {{
   "patched_files": [

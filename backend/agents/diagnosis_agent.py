@@ -90,6 +90,28 @@ Your diagnosis must be based primarily on what you see in the code,
 5. If they DON'T MATCH because the code is actually CORRECT and BUG-FREE: Set bug_found to false. Explain in root_cause that the code handles the described issue correctly and is bug-free.
 6. If the code files are too vague to analyze: Then fall back to the user's error description with low confidence.
 
+IMPORTANT: Analyze the ENTIRE codebase thoroughly.
+Do not stop at the first bug you find.
+
+Common pattern: fixing one bug reveals another. 
+Look for ALL of the following in every file:
+- Uninitialized variables or collections
+- String comparison using == instead of .equals()
+- Missing null checks
+- Logic errors (wrong operator, off-by-one, etc.)
+- Resource leaks
+
+If you find multiple bugs, list ALL affected files 
+and describe ALL bugs in the root_cause field.
+The fix_direction should address ALL bugs found,
+not just the first one.
+
+Example: 'Two bugs found: (1) users list never 
+initialized in UserRepository constructor causing 
+NullPointerException. (2) String comparison uses == 
+instead of .equals() in UserService.registerUser() 
+causing duplicate entries to not be detected.'
+
 Based on this limited information, provide a diagnosis.
 Your response MUST be ONLY valid JSON matching this exact structure:
 {{

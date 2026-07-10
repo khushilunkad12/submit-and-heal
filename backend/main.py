@@ -15,10 +15,13 @@ import shutil
 from dotenv import load_dotenv
 from typing import Optional, List
 
-from agents.diagnosis_agent import diagnose, DiagnosisResult
-from agents.fix_agent import generate_fix, FixResult
-from agents.verify_agent import verify_fix, VerifyResult
-from agents.deploy_agent import create_pr, DeployResult
+from agents.diagnosis_agent import DiagnosisResult
+from agents.fix_agent import FixResult
+from agents.verify_agent import VerifyResult
+from agents.deploy_agent import DeployResult
+
+from graph.pipeline import healing_graph
+from graph.state import HealingState
 
 # Load environment variables from .env
 load_dotenv()
@@ -78,27 +81,7 @@ class SubmitResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def detect_stack(file_list: List[str]) -> str:
-    """
-    Simple heuristic to detect the likely tech stack based on file names.
-    """
-    if "package.json" in file_list:
-        return "Node.js"
-    if any(f in file_list for f in ["requirements.txt", "pyproject.toml", "setup.py"]):
-        return "Python"
-    if any(f in file_list for f in ["pom.xml", "build.gradle"]):
-        return "Java"
-    if "Gemfile" in file_list:
-        return "Ruby"
-    if "go.mod" in file_list:
-        return "Go"
-    if "Cargo.toml" in file_list:
-        return "Rust"
-    if "composer.json" in file_list:
-        return "PHP"
-    return "Unknown"
 
-# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -122,149 +105,88 @@ async def submit(payload: SubmitRequest):
     if not payload.error_description.strip():
         raise HTTPException(status_code=422, detail="error_description cannot be empty")
 
-    repo_url = payload.repo_url.strip()
-
-    # Use ignore_cleanup_errors=True to handle read-only .git files on Windows
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
-        try:
-            print(f"Cloning {repo_url} into {temp_dir} ...")
-            # Clone the repository with depth 1 to speed it up
-            # Use GIT_TERMINAL_PROMPT=0 to prevent hanging on auth prompts
-            env = os.environ.copy()
-            env["GIT_TERMINAL_PROMPT"] = "0"
-            
-            result = subprocess.run(
-                ["git", "clone", "--depth", "1", repo_url, temp_dir],
-                timeout=30,
-                capture_output=True,
-                text=True,
-                env=env
-            )
-            
-            if result.returncode != 0:
-                print(f"Git clone failed: {result.stderr}")
-                raise HTTPException(
-                    status_code=400, 
-                    detail="Could not access repository. Make sure it's public and the URL is correct."
-                )
-                
-        except subprocess.TimeoutExpired:
-            print("Git clone timed out.")
-            raise HTTPException(
-                status_code=400, 
-                detail="Cloning the repository timed out. Is it too large or unreachable?"
-            )
-        except HTTPException:
-            raise
-        except Exception as e:
-            print(f"Exception during clone: {e}")
-            raise HTTPException(
-                status_code=400, 
-                detail="Could not access repository. Make sure it's public and the URL is correct."
-            )
-            
-        # Inspect the repository
-        file_list = []
-        files_content = {}
-        readme_content = None
-        total_content_chars = 0
-        MAX_CHARS = 100000  # about 25,000 tokens
-        
-        # Check if cloning created a subfolder inside temp_dir
-        # Sometimes `git clone url dir` creates `dir/repo_name` instead of cloning into `dir` directly?
-        # Actually `git clone url dir` should clone into `dir`. Let's verify by listing temp_dir
-        print(f"Files in temp_dir root: {os.listdir(temp_dir)}")
-        
-        # Walk the directory
-        for root_dir, dirs, files in os.walk(temp_dir):
-            # Modify dirs in-place to skip certain directories
-            dirs[:] = [d for d in dirs if d not in [".git", "node_modules", "venv", ".venv", "__pycache__", "target", "build", "dist"]]
-            
-            for file in files:
-                # Create a relative path from the temp_dir
-                full_path = os.path.join(root_dir, file)
-                rel_path = os.path.relpath(full_path, temp_dir)
-                # Convert Windows backslashes to forward slashes for cross-platform display
-                rel_path = rel_path.replace("\\", "/")
-                file_list.append(rel_path)
-                
-                # Check for README
-                if rel_path.lower() in ["readme.md", "readme.txt", "readme"]:
-                    try:
-                        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                            content = f.read()
-                            if len(content) > 1000:
-                                readme_content = content[:1000] + "\n\n... (truncated)"
-                            else:
-                                readme_content = content
-                    except Exception:
-                        pass
-                else:
-                    # Read regular file content if within limit
-                    if total_content_chars < MAX_CHARS:
-                        # Skip likely binary extensions or assets
-                        ext = os.path.splitext(rel_path)[1].lower()
-                        if ext not in [".jpg", ".png", ".gif", ".ico", ".svg", ".zip", ".tar", ".gz", ".pdf", ".mp4"]:
-                            try:
-                                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                                    content = f.read()
-                                    if len(content) > 5000:
-                                        content = content[:5000] + "\n\n... (file truncated)"
-                                    files_content[rel_path] = content
-                                    total_content_chars += len(content)
-                            except Exception:
-                                pass
-        
-        # Sort files alphabetically
-        file_list.sort()
-        
-        print(f"Extracted {len(file_list)} files. First few: {file_list[:5]}")
-        
-        # Detect stack
-        base_names = [os.path.basename(f) for f in file_list]
-        detected_stack = detect_stack(base_names)
-        print(f"Detected stack: {detected_stack} based on files")
-        
-        # Prepare repo_info for diagnosis
-        repo_info = {
-            "detected_stack": detected_stack,
-            "file_list": file_list,
-            "files_content": files_content,
-            "readme_preview": readme_content
-        }
-        
-        # Call the diagnosis agent
-        diagnosis_result = await diagnose(repo_info, payload.error_description)
-        
-        # Call the fix agent if confidence is high or medium
-        fix_result = None
-        verify_result = None
-        deploy_result = None
-        
-        if diagnosis_result.bug_found and diagnosis_result.confidence in ["high", "medium"]:
-            fix_result = await generate_fix(temp_dir, diagnosis_result.model_dump())
-            if fix_result and fix_result.confidence in ["high", "medium"]:
-                verify_result = await verify_fix(fix_result.model_dump(), repo_info.get("files_content"))
-                
-                # Call deploy agent if fix is verified and github token is provided
-                if verify_result and verify_result.verified and payload.github_token:
-                    deploy_result = await create_pr(
-                        repo_url, 
-                        fix_result.model_dump(), 
-                        diagnosis_result.model_dump(), 
-                        payload.github_token
-                    )
-        
-        return SubmitResponse(
-            status="success",
-            repo_url=payload.repo_url,
-            error_description=payload.error_description,
-            message="Repository successfully cloned, inspected, diagnosed, patched, and verified.",
-            detected_stack=detected_stack,
-            file_list=file_list,
-            readme_preview=readme_content,
-            diagnosis=diagnosis_result,
-            fix=fix_result,
-            verify=verify_result,
-            deploy=deploy_result
+    # Initialize state
+    initial_state: HealingState = {
+        "repo_url": payload.repo_url.strip(),
+        "error_description": payload.error_description.strip(),
+        "github_token": payload.github_token,
+        "fix_attempts": 0,
+        "max_fix_attempts": 3,
+        "should_retry_fix": False,
+        "file_list": [],
+        "detected_stack": "",
+        "readme_preview": "",
+        "repo_path": "",
+        "root_cause": "",
+        "affected_files": [],
+        "confidence": "",
+        "confidence_percentage": 0,
+        "fix_direction": "",
+        "error_category": "",
+        "why_it_happened": "",
+        "bug_found": True,
+        "patched_files": [],
+        "patch_summary": "",
+        "fix_confidence": "",
+        "verified": False,
+        "verify_output": "",
+        "verify_error": "",
+        "tests_passed": False,
+        "pr_url": "",
+        "deploy_success": False,
+        "deploy_message": "",
+        "error_message": None,
+    }
+    
+    # Run the graph
+    final_state = await healing_graph.ainvoke(initial_state)
+    
+    # Check if there was an early error
+    if final_state.get("error_message") and not final_state.get("file_list"):
+        raise HTTPException(
+            status_code=400,
+            detail=final_state["error_message"]
         )
+    
+    # Build response from final state
+    return SubmitResponse(
+        status="success",
+        repo_url=payload.repo_url,
+        error_description=payload.error_description,
+        message="Repository successfully processed by the Healing Agent Graph.",
+        detected_stack=final_state.get("detected_stack"),
+        file_list=final_state.get("file_list"),
+        readme_preview=final_state.get("readme_preview"),
+        diagnosis=DiagnosisResult(
+            root_cause=final_state.get("root_cause", ""),
+            affected_files=final_state.get("affected_files", []),
+            confidence=final_state.get("confidence", ""),
+            confidence_percentage=final_state.get("confidence_percentage", 0),
+            fix_direction=final_state.get("fix_direction", ""),
+            error_category=final_state.get("error_category", ""),
+            why_it_happened=final_state.get("why_it_happened", ""),
+            bug_found=final_state.get("bug_found", True),
+        ) if final_state.get("root_cause") else None,
+        fix=FixResult(
+            patched_files=final_state.get("patched_files", []),
+            patch_summary=final_state.get("patch_summary", ""),
+            confidence=final_state.get("fix_confidence", "")
+        ) if final_state.get("patched_files") else None,
+        verify=VerifyResult(
+            success=final_state.get("tests_passed", False),
+            output=final_state.get("verify_output", ""),
+            error=final_state.get("verify_error", ""),
+            verified=final_state.get("verified", False),
+            summary="Verification completed."
+        ) if final_state.get("verify_output") or final_state.get("verify_error") or final_state.get("verified") else None,
+        deploy=DeployResult(
+            success=final_state.get("deploy_success", False),
+            pr_url=final_state.get("pr_url", ""),
+            branch_name="",
+            pr_title="",
+            pr_body="",
+            preview_url="",
+            message=final_state.get("deploy_message", "")
+        ) if final_state.get("deploy_message") else None,
+        error_message=final_state.get("error_message")
+    )

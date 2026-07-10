@@ -87,7 +87,25 @@ async def verify_fix(fix_result: dict, files_content: dict = None) -> VerifyResu
 
                 # Run the entry file
                 if extension == ".py":
-                    execution = sandbox.run_code(f"!python {entry_file_path}")
+                    # Determine the Python entry point
+                    all_files = {}
+                    if files_content:
+                        all_files.update(files_content)
+                    for pf in patched_files:
+                        fpath = pf.get("file_path", "")
+                        if fpath:
+                            all_files[fpath] = True
+
+                    python_files = [f for f in all_files.keys() if f.endswith(".py")]
+                    
+                    py_entry = entry_file_path
+                    for candidate in ["main.py", "app.py", "run.py"]:
+                        matches = [f for f in python_files if os.path.basename(f) == candidate]
+                        if matches:
+                            py_entry = matches[0]
+                            break
+
+                    execution = sandbox.run_code(f"!python {py_entry}")
 
                     # Capture stdout correctly
                     output = ""
@@ -120,31 +138,93 @@ async def verify_fix(fix_result: dict, files_content: dict = None) -> VerifyResu
                             summary="Code verified successfully in Python sandbox."
                         )
                 elif extension in [".js", ".ts"]:
-                    result = sandbox.commands.run(f"node {entry_file_path}")
+                    # Determine the JS/TS entry point
+                    all_files = {}
+                    if files_content:
+                        all_files.update(files_content)
+                    for pf in patched_files:
+                        fpath = pf.get("file_path", "")
+                        if fpath:
+                            all_files[fpath] = True
 
-                    if result.exit_code != 0:
+                    js_files = [f for f in all_files.keys() if f.endswith(".js") or f.endswith(".ts")]
+                    
+                    js_entry = entry_file_path
+                    for candidate in ["main.js", "index.js", "app.js", "main.ts", "index.ts", "app.ts"]:
+                        matches = [f for f in js_files if os.path.basename(f) == candidate]
+                        if matches:
+                            js_entry = matches[0]
+                            break
+
+                    execution = sandbox.run_code(f"!node {js_entry}")
+
+                    # Capture stdout correctly
+                    output = ""
+                    if execution.logs.stdout:
+                        output = "\\n".join(execution.logs.stdout)
+                        
+                    # Capture stderr correctly  
+                    error = ""
+                    if execution.logs.stderr:
+                        error = "\\n".join(execution.logs.stderr)
+                    if execution.error:
+                        if error:
+                            error += "\\n"
+                        error += f"{execution.error.name}: {execution.error.value}\\n{execution.error.traceback}"
+
+                    if error:
                         return VerifyResult(
                             success=False,
-                            output=strip_ansi(result.stdout),
-                            error=strip_ansi(result.stderr),
+                            output=strip_ansi(output),
+                            error=strip_ansi(error),
                             verified=False,
                             summary="Code execution failed with errors."
                         )
                     else:
                         return VerifyResult(
                             success=True,
-                            output=strip_ansi(result.stdout) or "Code executed successfully (no output).",
+                            output=strip_ansi(output) or "Code executed successfully (no output).",
                             error="",
                             verified=True,
                             summary="Code verified successfully in Node.js sandbox."
                         )
                 elif extension == ".java":
-                    filename_full = os.path.basename(entry_file_path)
-                    classname = os.path.splitext(filename_full)[0]
-                    dir_name = os.path.dirname(entry_file_path)
+                    # Build unified view of all files to find the entry point
+                    all_files = {}
+                    if files_content:
+                        all_files.update(files_content)
+                    for pf in patched_files:
+                        fpath = pf.get("file_path", "")
+                        fcontent = pf.get("patched_content", "")
+                        if fpath and fcontent:
+                            all_files[fpath] = fcontent
+
+                    # Find candidates
+                    main_candidates = []
+                    for fpath, fcontent in all_files.items():
+                        if fpath.endswith(".java") and "public static void main(" in fcontent:
+                            main_candidates.append(fpath)
+                            
+                    if not main_candidates:
+                        # Fallback to the target file if no main method found
+                        main_candidates.append(entry_file_path)
+                        
+                    # Sort candidates: Main.java first, App.java second, alphabetical third
+                    def sort_key(path):
+                        basename = os.path.basename(path)
+                        if basename == "Main.java":
+                            return (0, basename)
+                        if basename == "App.java":
+                            return (1, basename)
+                        return (2, basename)
+                        
+                    main_candidates.sort(key=sort_key)
+                    main_file = main_candidates[0]
+                    classname = os.path.splitext(os.path.basename(main_file))[0]
+                    dir_name = os.path.dirname(main_file)
                     
-                    # 1. Compile
-                    compile_script = f"import subprocess; r = subprocess.run(['javac', '{filename_full}'], cwd='{dir_name or '.'}', capture_output=True, text=True); print(r.stdout); print(r.stderr)"
+                    # 1. Compile ALL java files
+                    compile_script = f"import subprocess; r = subprocess.run('javac *.java', shell=True, cwd='{dir_name or '.'}', capture_output=True, text=True); print(r.stdout); print(r.stderr)"
                     compile_result = sandbox.run_code(compile_script)
                     
                     compile_error = ""
