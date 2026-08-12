@@ -117,6 +117,24 @@ Always trace the full call chain and fix every file involved. A partial fix that
 
         parsed_json = json.loads(response_text)
         
+        # PROGRAMMATIC FALLBACK: Ensure module.exports is preserved for JS/TS
+        if "patched_files" in parsed_json:
+            for pf in parsed_json["patched_files"]:
+                file_path = pf.get("file_path", "")
+                if file_path.endswith(".js") or file_path.endswith(".ts"):
+                    orig_content = pf.get("original_content", "")
+                    patched_content = pf.get("patched_content", "")
+                    
+                    # Find module.exports lines in original
+                    import re
+                    exports_matches = re.findall(r'^(module\.exports\s*=.*)$', orig_content, re.MULTILINE)
+                    
+                    if exports_matches:
+                        for export_line in exports_matches:
+                            # If the patched content doesn't have it, append it
+                            if "module.exports" not in patched_content:
+                                pf["patched_content"] = patched_content.rstrip() + f"\n\n{export_line}\n"
+        
         return FixResult(**parsed_json)
         
     except Exception as e:

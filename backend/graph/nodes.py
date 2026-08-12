@@ -9,6 +9,7 @@ from agents.diagnosis_agent import diagnose
 from agents.fix_agent import generate_fix
 from agents.verify_agent import verify_fix
 from agents.deploy_agent import create_pr
+from rag.incident_store import store_incident
 
 def detect_stack(file_list: list[str]) -> str:
     """Simple heuristic to detect the likely tech stack based on file names."""
@@ -27,6 +28,24 @@ def detect_stack(file_list: list[str]) -> str:
     if "composer.json" in file_list:
         return "PHP"
     return "Unknown"
+
+def should_read_file(file_path: str) -> bool:
+    """Filter to only read specific code/text files and skip large/binary files."""
+    ext = os.path.splitext(file_path)[1].lower()
+    allowed_exts = {
+        ".py", ".java", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json", 
+        ".md", ".txt", ".xml", ".yaml", ".yml", ".gradle", ".pom", ".rb", 
+        ".go", ".rs", ".cpp", ".c", ".h", ".kt", ".swift"
+    }
+    if ext not in allowed_exts:
+        return False
+    try:
+        # Skip files larger than 50KB
+        if os.path.getsize(file_path) > 50 * 1024:
+            return False
+    except OSError:
+        return False
+    return True
 
 async def intake_node(state: HealingState) -> HealingState:
     """Clones the repository and extracts file contents to a temp directory."""
@@ -77,8 +96,7 @@ async def intake_node(state: HealingState) -> HealingState:
                     pass
             else:
                 if total_content_chars < MAX_CHARS:
-                    ext = os.path.splitext(rel_path)[1].lower()
-                    if ext not in [".jpg", ".png", ".gif", ".ico", ".svg", ".zip", ".tar", ".gz", ".pdf", ".mp4"]:
+                    if should_read_file(full_path):
                         try:
                             with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                                 content = f.read()
@@ -111,7 +129,7 @@ async def diagnosis_node(state: HealingState) -> HealingState:
     
     for rel_path in state["file_list"]:
         full_path = os.path.join(temp_dir, rel_path)
-        if os.path.exists(full_path):
+        if os.path.exists(full_path) and should_read_file(full_path):
             try:
                 with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                     files_content[rel_path] = f.read()
@@ -136,7 +154,9 @@ async def diagnosis_node(state: HealingState) -> HealingState:
         "fix_direction": diagnosis.fix_direction,
         "error_category": diagnosis.error_category,
         "why_it_happened": diagnosis.why_it_happened,
-        "bug_found": diagnosis.bug_found
+        "bug_found": diagnosis.bug_found,
+        "similar_incidents_used": diagnosis.similar_incidents_used,
+        "similar_incidents_count": diagnosis.similar_incidents_count
     }
 
 async def fix_node(state: HealingState) -> HealingState:
@@ -179,7 +199,7 @@ async def verify_node(state: HealingState) -> HealingState:
     files_content = {}
     for rel_path in state["file_list"]:
         full_path = os.path.join(temp_dir, rel_path)
-        if os.path.exists(full_path):
+        if os.path.exists(full_path) and should_read_file(full_path):
             try:
                 with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                     files_content[rel_path] = f.read()
@@ -253,6 +273,13 @@ async def escalate_node(state: HealingState) -> HealingState:
         **state,
         "error_message": msg
     }
+
+async def store_incident_node(state: HealingState) -> HealingState:
+    """Stores the verified incident in RAG memory before terminating."""
+    if state.get("verified") and state.get("root_cause"):
+        await store_incident(state)
+        print(f"Incident stored in RAG memory")
+    return state
 
 def should_attempt_fix(state: HealingState) -> str:
     """Router: after diagnosis, fix or escalate."""

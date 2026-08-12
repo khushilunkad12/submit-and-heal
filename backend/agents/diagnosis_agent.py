@@ -3,6 +3,7 @@ import json
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
+from rag.incident_store import retrieve_similar_incidents
 
 class DiagnosisResult(BaseModel):
     root_cause: str
@@ -13,6 +14,8 @@ class DiagnosisResult(BaseModel):
     error_category: str
     why_it_happened: str
     bug_found: bool
+    similar_incidents_used: bool = False
+    similar_incidents_count: int = 0
 
 async def diagnose(repo_info: dict, error_description: str) -> DiagnosisResult:
     """
@@ -50,6 +53,23 @@ async def diagnose(repo_info: dict, error_description: str) -> DiagnosisResult:
         truncated_files = file_list[:50]
         files_str = "\n".join(truncated_files)
         
+        # Retrieve similar past incidents
+        similar = await retrieve_similar_incidents(
+            error_description,
+            "",  # empty root cause on first call
+            detected_stack
+        )
+        
+        similar_incidents_text = ""
+        if similar:
+            similar_incidents_text = "SIMILAR PAST INCIDENTS (use these to improve diagnosis):\n"
+            for inc in similar:
+                similar_incidents_text += f"- Past error: {inc.get('error_description')}\n"
+                similar_incidents_text += f"- Root cause found: {inc.get('root_cause')}\n"
+                similar_incidents_text += f"- Fix that worked: {inc.get('fix_summary')}\n"
+                similar_incidents_text += f"- Confidence: {inc.get('confidence_percentage')}%\n\n"
+            similar_incidents_text += "Use these past cases as context but analyze the current code independently.\n\n"
+        
         prompt = f"""You are an expert AI software diagnostician.
 Analyze the following repository information and the user's error description to provide a diagnosis.
 
@@ -77,6 +97,7 @@ First 50 Files in Repository:
 README Preview:
 {readme_preview}
 
+{similar_incidents_text}
 Repository Code Files:
 {files_content_str}
 
@@ -155,7 +176,11 @@ Do not include any preamble, markdown formatting (like ```json), or trailing tex
             
         parsed_json = json.loads(response_text)
         
-        return DiagnosisResult(**parsed_json)
+        return DiagnosisResult(
+            **parsed_json,
+            similar_incidents_used=len(similar) > 0,
+            similar_incidents_count=len(similar)
+        )
         
     except Exception as e:
         # Fallback if API fails or parsing fails

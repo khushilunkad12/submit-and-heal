@@ -21,6 +21,8 @@ class HealingState(TypedDict):
     error_category: str
     why_it_happened: str
     bug_found: bool
+    similar_incidents_used: bool
+    similar_incidents_count: int
     
     # Fix outputs
     patched_files: List[dict]

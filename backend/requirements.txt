@@ -5,3 +5,5 @@ google-genai>=0.1.0
 e2b-code-interpreter
 langgraph
 langchain-core
+supabase
+sentence-transformers

@@ -2,6 +2,7 @@ from langgraph.graph import StateGraph, END
 from .state import HealingState
 from .nodes import (intake_node, diagnosis_node, fix_node, 
                     verify_node, deploy_node, escalate_node,
+                    store_incident_node,
                     should_attempt_fix, should_retry_or_deploy)
 
 def build_healing_graph():
@@ -14,6 +15,7 @@ def build_healing_graph():
     graph.add_node("verify", verify_node)
     graph.add_node("deploy", deploy_node)
     graph.add_node("escalate", escalate_node)
+    graph.add_node("store_incident", store_incident_node)
     
     # Set entry point
     graph.set_entry_point("intake")
@@ -46,11 +48,13 @@ def build_healing_graph():
         }
     )
     
-    # Terminal nodes
-    graph.add_edge("deploy", END)
-    graph.add_edge("escalate", END)
+    # Terminal nodes route through store_incident
+    graph.add_edge("deploy", "store_incident")
+    graph.add_edge("escalate", "store_incident")
+    graph.add_edge("store_incident", END)
     
     return graph.compile()
 
 # Create the graph instance
 healing_graph = build_healing_graph()
+ 

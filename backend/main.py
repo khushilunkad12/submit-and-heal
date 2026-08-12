@@ -166,6 +166,8 @@ async def submit(payload: SubmitRequest):
             error_category=final_state.get("error_category", ""),
             why_it_happened=final_state.get("why_it_happened", ""),
             bug_found=final_state.get("bug_found", True),
+            similar_incidents_used=final_state.get("similar_incidents_used", False),
+            similar_incidents_count=final_state.get("similar_incidents_count", 0),
         ) if final_state.get("root_cause") else None,
         fix=FixResult(
             patched_files=final_state.get("patched_files", []),
