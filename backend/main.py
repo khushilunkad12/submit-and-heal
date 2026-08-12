@@ -18,7 +18,7 @@ from typing import Optional, List
 from agents.diagnosis_agent import DiagnosisResult
 from agents.fix_agent import FixResult
 from agents.verify_agent import VerifyResult
-from agents.deploy_agent import DeployResult
+from agents.deploy_agent import DeployResult, create_pr
 
 from graph.pipeline import healing_graph
 from graph.state import HealingState
@@ -58,6 +58,13 @@ class SubmitRequest(BaseModel):
     repo_url: str
     error_description: str
     github_token: Optional[str] = None
+
+
+class CreatePRRequest(BaseModel):
+    repo_url: str
+    github_token: str
+    patched_files: list[dict]
+    diagnosis: dict
 
 
 class SubmitResponse(BaseModel):
@@ -192,3 +199,23 @@ async def submit(payload: SubmitRequest):
         ) if final_state.get("deploy_message") else None,
         error_message=final_state.get("error_message")
     )
+
+@app.post("/api/create-pr", response_model=DeployResult)
+async def api_create_pr(payload: CreatePRRequest):
+    """
+    Allows creating a PR directly if the user provides a token after the fact.
+    """
+    if not payload.github_token.strip():
+        return DeployResult(
+            success=False, pr_url="", branch_name="", pr_title="", pr_body="", preview_url="",
+            message="GitHub token is required."
+        )
+        
+    fix_result = {
+        "patched_files": payload.patched_files,
+        "patch_summary": "",
+        "confidence": payload.diagnosis.get("confidence", "unknown")
+    }
+    
+    result = await create_pr(payload.repo_url, fix_result, payload.diagnosis, payload.github_token.strip())
+    return result

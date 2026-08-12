@@ -69,7 +69,7 @@ When generating fixes:
 
 Return the COMPLETE fixed file content in patched_content, not just the changed lines.
 
-IMPORTANT for JavaScript: Every file that originally had a module.exports line MUST keep it in the fixed version. Never remove or forget module.exports when fixing JavaScript files. Check every patched file and ensure module.exports is present if it was in the original.
+CRITICAL for JavaScript CommonJS modules: Every .js file that originally ends with 'module.exports = ClassName' MUST keep that exact line at the end of the fixed version. Never remove module.exports. Check every patched .js file and ensure module.exports is present if it was in the original file.
 
 Your response MUST be ONLY valid JSON matching this exact structure:
 {{

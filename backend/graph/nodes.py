@@ -85,18 +85,20 @@ async def intake_node(state: HealingState) -> HealingState:
         for file in files:
             full_path = os.path.join(root_dir, file)
             rel_path = os.path.relpath(full_path, temp_dir).replace("\\", "/")
-            file_list.append(rel_path)
+            is_readme = rel_path.lower() in ["readme.md", "readme.txt", "readme"]
             
-            if rel_path.lower() in ["readme.md", "readme.txt", "readme"]:
-                try:
-                    with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-                        readme_content = content[:1000] + "\n\n... (truncated)" if len(content) > 1000 else content
-                except Exception:
-                    pass
-            else:
-                if total_content_chars < MAX_CHARS:
-                    if should_read_file(full_path):
+            if is_readme or should_read_file(full_path):
+                file_list.append(rel_path)
+                
+                if is_readme:
+                    try:
+                        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read()
+                            readme_content = content[:1000] + "\n\n... (truncated)" if len(content) > 1000 else content
+                    except Exception:
+                        pass
+                else:
+                    if total_content_chars < MAX_CHARS:
                         try:
                             with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                                 content = f.read()

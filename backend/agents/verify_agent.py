@@ -77,7 +77,17 @@ async def verify_fix(fix_result: dict, files_content: dict = None) -> VerifyResu
                 for pf in patched_files:
                     fpath = pf.get("file_path", "")
                     fcontent = pf.get("patched_content", "")
+                    orig_content = pf.get("original_content", "")
+                    
                     if fpath and fcontent:
+                        if fpath.endswith(".js"):
+                            if "module.exports" in orig_content and "module.exports" not in fcontent:
+                                class_match = re.search(r'class\s+([A-Za-z0-9_]+)', fcontent)
+                                if class_match:
+                                    classname = class_match.group(1)
+                                    fcontent = fcontent.rstrip() + f"\n\nmodule.exports = {classname};\n"
+                                    print(f"WARNING: Auto-added missing module.exports to {fpath}")
+
                         # Ensure directory exists in the sandbox
                         dir_name = os.path.dirname(fpath)
                         if dir_name:
