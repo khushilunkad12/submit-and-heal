@@ -42,19 +42,17 @@ export default function LandingPage() {
 
       {/* Stats Row */}
       <section className="w-full max-w-4xl mx-auto px-6 py-10 border-y border-gray-800/50 flex flex-col md:flex-row justify-center items-center gap-8 md:gap-24">
-        <div className="text-center">
-          <div className="text-3xl font-bold text-white">5</div>
-          <div className="text-sm text-gray-500 mt-1 uppercase tracking-wide font-medium">AI agents</div>
-        </div>
-        <div className="text-center">
-          <div className="text-3xl font-bold text-white">&lt;60s</div>
-          <div className="text-sm text-gray-500 mt-1 uppercase tracking-wide font-medium">Avg fix time</div>
-        </div>
-        <div className="text-center">
-          <div className="text-3xl font-bold text-white">3</div>
-          <div className="text-sm text-gray-500 mt-1 uppercase tracking-wide font-medium">Languages supported</div>
-          <div className="text-xs text-gray-600 mt-1 font-medium">Python, Java, JavaScript</div>
-        </div>
+        {[
+          { num: "5", label: "AI agents", sub: "" },
+          { num: "<60s", label: "Avg fix time", sub: "" },
+          { num: "3", label: "Languages supported", sub: "Python, Java, JavaScript" }
+        ].map((stat, i) => (
+          <div key={i} className="flex flex-col items-center text-center flex-1">
+            <div className="text-3xl font-bold text-white">{stat.num}</div>
+            <div className="text-sm text-gray-500 mt-1 uppercase tracking-wide font-medium">{stat.label}</div>
+            <div className="text-xs text-gray-600 mt-1 font-medium min-h-[16px]">{stat.sub}</div>
+          </div>
+        ))}
       </section>
 
       {/* How it works */}

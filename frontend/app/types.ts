@@ -4,6 +4,13 @@ export interface SubmitPayload {
   github_token?: string;
 }
 
+export interface CreatePRRequest {
+  repo_url: string;
+  github_token: string;
+  patched_files: PatchedFile[];
+  diagnosis: DiagnosisResult;
+}
+
 export interface DiagnosisResult {
   root_cause: string;
   affected_files: string[];
@@ -13,6 +20,8 @@ export interface DiagnosisResult {
   error_category: string;
   why_it_happened: string;
   bug_found: boolean;
+  similar_incidents_used: boolean;
+  similar_incidents_count: number;
 }
 
 export interface PatchedFile {

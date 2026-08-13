@@ -19,9 +19,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Submit and Heal — AI-powered App Repair",
-  description:
-    "Submit your broken GitHub repo and error description. An AI agent will diagnose and fix it automatically.",
+  title: "Submit & Heal — AI Debugging Agent",
+  description: "Autonomous AI system that diagnoses, fixes, and deploys broken GitHub repositories",
+  icons: {
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🩺</text></svg>"
+  }
 };
 
 export default function RootLayout({

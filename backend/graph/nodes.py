@@ -13,17 +13,23 @@ from rag.incident_store import store_incident
 
 def detect_stack(file_list: list[str]) -> str:
     """Simple heuristic to detect the likely tech stack based on file names."""
+    if "pom.xml" in file_list:
+        return "Java (Maven)"
+    if "build.gradle" in file_list:
+        return "Java (Gradle)"
+    if any(f.endswith(".java") for f in file_list):
+        return "Java"
+    if any(f.endswith(".kt") for f in file_list):
+        return "Kotlin"
     if "package.json" in file_list:
         return "Node.js"
     if any(f in file_list for f in ["requirements.txt", "pyproject.toml", "setup.py"]):
         return "Python"
-    if any(f in file_list for f in ["pom.xml", "build.gradle"]):
-        return "Java"
-    if "Gemfile" in file_list:
+    if "Gemfile" in file_list or any(f.endswith(".rb") for f in file_list):
         return "Ruby"
-    if "go.mod" in file_list:
+    if "go.mod" in file_list or any(f.endswith(".go") for f in file_list):
         return "Go"
-    if "Cargo.toml" in file_list:
+    if "Cargo.toml" in file_list or any(f.endswith(".rs") for f in file_list):
         return "Rust"
     if "composer.json" in file_list:
         return "PHP"

@@ -118,12 +118,15 @@ export default function HealingPage() {
               </h1>
               
               {/* Progress Bar */}
-              <div className="w-full h-2 bg-gray-800 rounded-full mt-6 overflow-hidden">
+              <div className="w-full h-2 bg-gray-800 rounded-full mt-6 mb-3 overflow-hidden">
                 <div 
                   className="h-full bg-indigo-500 transition-all duration-1000 ease-out rounded-full"
                   style={{ width: `${progress}%` }}
                 />
               </div>
+              <p className="text-xs text-gray-400 italic max-w-sm mx-auto leading-relaxed">
+                ⏱ This usually takes 30-60 seconds — our AI agents are reading your code, diagnosing the bug, generating a fix, and verifying it in a sandbox.
+              </p>
             </div>
 
             {/* Steps List */}

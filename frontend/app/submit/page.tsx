@@ -12,16 +12,43 @@ export default function SubmitPage() {
   const [errorDescription, setErrorDescription] = useState<string>("");
   const [githubToken, setGithubToken] = useState<string>("");
 
+  const [repoUrlError, setRepoUrlError] = useState<string>("");
+  const [errorDescriptionError, setErrorDescriptionError] = useState<string>("");
+
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!repoUrl.trim() || !errorDescription.trim()) {
+    let hasError = false;
+    let firstInvalidId = "";
+
+    const trimmedUrl = repoUrl.trim();
+    if (!trimmedUrl) {
+      setRepoUrlError("Please enter a GitHub repository URL");
+      hasError = true;
+      firstInvalidId = "repo-url";
+    } else if (!trimmedUrl.startsWith("https://github.com/")) {
+      setRepoUrlError("Please enter a valid GitHub URL (e.g. https://github.com/username/repo)");
+      hasError = true;
+      firstInvalidId = "repo-url";
+    }
+
+    const trimmedDesc = errorDescription.trim();
+    if (!trimmedDesc) {
+      setErrorDescriptionError("Please describe the error or paste your error logs");
+      hasError = true;
+      if (!firstInvalidId) firstInvalidId = "error-description";
+    }
+
+    if (hasError) {
+      if (firstInvalidId) {
+        document.getElementById(firstInvalidId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
       return;
     }
 
     const payload: SubmitPayload = {
-      repo_url: repoUrl.trim(),
-      error_description: errorDescription.trim(),
+      repo_url: trimmedUrl,
+      error_description: trimmedDesc,
       github_token: githubToken.trim() || undefined,
     };
 
@@ -72,16 +99,20 @@ export default function SubmitPage() {
                 type="url"
                 placeholder="https://github.com/your-org/broken-repo"
                 value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
+                onChange={(e) => {
+                  setRepoUrl(e.target.value);
+                  if (repoUrlError) setRepoUrlError("");
+                }}
                 required
-                className="
+                className={`
                   w-full px-4 py-3 rounded-lg
-                  bg-gray-800 border border-gray-700
+                  bg-gray-800 border ${repoUrlError ? 'border-red-500' : 'border-gray-700'}
                   text-white placeholder-gray-500
                   focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
                   transition-colors
-                "
+                `}
               />
+              {repoUrlError && <p className="mt-2 text-sm text-red-500">{repoUrlError}</p>}
             </div>
 
             {/* Error Description / Logs */}
@@ -97,18 +128,22 @@ export default function SubmitPage() {
                 rows={8}
                 placeholder={`TypeError: Cannot read properties of undefined (reading 'map')\n    at Component (/app/src/components/List.tsx:14:23)\n    at renderWithHooks ...`}
                 value={errorDescription}
-                onChange={(e) => setErrorDescription(e.target.value)}
+                onChange={(e) => {
+                  setErrorDescription(e.target.value);
+                  if (errorDescriptionError) setErrorDescriptionError("");
+                }}
                 required
-                className="
+                className={`
                   w-full px-4 py-3 rounded-lg
-                  bg-gray-800 border border-gray-700
+                  bg-gray-800 border ${errorDescriptionError ? 'border-red-500' : 'border-gray-700'}
                   text-white placeholder-gray-500
                   font-mono text-sm
                   focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
                   resize-y
                   transition-colors
-                "
+                `}
               />
+              {errorDescriptionError && <p className="mt-2 text-sm text-red-500">{errorDescriptionError}</p>}
             </div>
 
             {/* GitHub Token (Optional) */}
