@@ -7,13 +7,30 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
-)
+supabase = None
+
+def get_supabase():
+    global supabase
+
+    if supabase is not None:
+        return supabase
+
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+
+    if not url or not key:
+        return None
+
+    supabase = create_client(url, key)
+    return supabase
 
 async def store_incident(state: dict) -> bool:
     try:
+        client = get_supabase()
+        if not client:
+            print("RAG memory skipped: Supabase env vars missing")
+            return False
+
         embedding = [float(x) for x in generate_embedding(
             create_incident_text(
                 state["error_description"],
@@ -22,7 +39,7 @@ async def store_incident(state: dict) -> bool:
             )
         )]
         
-        supabase.table("incidents").insert({
+        client.table("incidents").insert({
             "repo_url": state.get("repo_url", ""),
             "error_description": state.get("error_description", ""),
             "detected_stack": state.get("detected_stack", ""),
@@ -50,12 +67,17 @@ async def retrieve_similar_incidents(
     limit: int = 3
 ) -> list[dict]:
     try:
+        client = get_supabase()
+        if not client:
+            print("RAG memory skipped: Supabase env vars missing")
+            return []
+
         text = create_incident_text(error_description, root_cause, detected_stack)
         query_embedding = np.array([float(x) for x in generate_embedding(text)])
         
         print(f"RAG: Fetching incidents from Supabase...")
         
-        result = supabase.table("incidents").select(
+        result = client.table("incidents").select(
             "id, error_description, detected_stack, error_category, "
             "root_cause, why_it_happened, fix_summary, "
             "affected_files, confidence_percentage, verified, embedding"
